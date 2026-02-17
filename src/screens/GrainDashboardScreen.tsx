@@ -9,8 +9,8 @@ interface GrainDashboardProps {
 }
 
 export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) => {
-    const { bins, loading: grainLoading, createBin, updateBin, deleteBin } = useGrain();
-    const { contracts, loading: contractLoading, createContract, updateContract, deleteContract } = useContracts();
+    const { bins, loading: grainLoading, addBin: createBin, updateBin, deleteBin } = useGrain();
+    const { contracts, loading: contractLoading, addContract: createContract, updateContract, deleteContract } = useContracts();
 
     // UI State
     const [binModalVisible, setBinModalVisible] = useState(false);

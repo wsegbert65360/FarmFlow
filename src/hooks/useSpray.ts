@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { db } from '../db/powersync';
 import { v4 as uuidv4 } from 'uuid';
+import { recordAudit } from '../utils/DatabaseUtility';
+import { useSettings } from './useSettings';
 
 export interface Recipe {
     id: string;
@@ -38,14 +40,16 @@ export const useSpray = () => {
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [sprayLogs, setSprayLogs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const { settings } = useSettings();
+    const farmId = settings?.farm_id || 'default_farm';
 
     useEffect(() => {
         const abortController = new AbortController();
 
         // Watch recipes
         db.watch(
-            'SELECT * FROM recipes',
-            [],
+            'SELECT * FROM recipes WHERE farm_id = ?',
+            [farmId],
             {
                 onResult: (result) => setRecipes(result.rows?._array || []),
                 onError: (e) => console.error('Failed to watch recipes', e)
@@ -61,8 +65,9 @@ export const useSpray = () => {
              FROM spray_logs sl
              LEFT JOIN recipes r ON sl.recipe_id = r.id
              LEFT JOIN fields f ON sl.field_id = f.id
+             WHERE sl.farm_id = ?
              ORDER BY sl.start_time DESC`,
-            [],
+            [farmId],
             {
                 onResult: (result) => {
                     setSprayLogs(result.rows?._array || []);
@@ -74,7 +79,7 @@ export const useSpray = () => {
         );
 
         return () => abortController.abort();
-    }, []);
+    }, [farmId]);
 
     const addSprayLog = async (params: {
         fieldId: string;
@@ -116,9 +121,6 @@ export const useSpray = () => {
             const durationSeconds = (acresTreated || 0) * 83 + 600;
             const endTime = new Date(now.getTime() + durationSeconds * 1000).toISOString();
 
-            // If total gallons or product are missing, try to calculate from fixedAcreage
-            // (Note: LogSessionScreen already does this calculation, this is a safety)
-
             // 1. Insert the log
             await db.execute(
                 `INSERT INTO spray_logs (
@@ -128,8 +130,9 @@ export const useSpray = () => {
                     target_crop, target_pest, applicator_name, applicator_cert, acres_treated,
                     phi_days, rei_hours,
                     notes,
+                    farm_id,
                     created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     id, params.fieldId, params.recipeId, startTime, endTime,
                     params.totalGallons, params.totalProduct,
@@ -145,24 +148,34 @@ export const useSpray = () => {
                     phi_days || null,
                     rei_hours || null,
                     params.notes || null,
-                    now
+                    farmId,
+                    now.toISOString()
                 ]
             );
 
             // 2. Passive Inventory Update
-            const recipeResult = await db.execute('SELECT product_name FROM recipes WHERE id = ?', [params.recipeId]);
+            const recipeResult = await db.execute('SELECT product_name FROM recipes WHERE id = ? AND farm_id = ?', [params.recipeId, farmId]);
             const productName = recipeResult.rows?._array[0]?.product_name;
 
             if (productName) {
-                const invResult = await db.execute('SELECT quantity_on_hand FROM inventory WHERE product_name = ?', [productName]);
+                const invResult = await db.execute('SELECT quantity_on_hand FROM inventory WHERE product_name = ? AND farm_id = ?', [productName, farmId]);
                 const currentQty = invResult.rows?._array[0]?.quantity_on_hand || 0;
                 const newQty = currentQty - params.totalProduct;
 
                 await db.execute(
-                    'INSERT OR REPLACE INTO inventory (id, product_name, quantity_on_hand, unit) VALUES ((SELECT id FROM inventory WHERE product_name = ?), ?, ?, ?)',
-                    [productName, productName, newQty, 'Gal']
+                    'INSERT OR REPLACE INTO inventory (id, product_name, quantity_on_hand, unit, farm_id) VALUES ((SELECT id FROM inventory WHERE product_name = ? AND farm_id = ?), ?, ?, ?, ?)',
+                    [productName, farmId, productName, newQty, 'Gal', farmId]
                 );
             }
+
+            await recordAudit({
+                action: 'INSERT',
+                tableName: 'spray_logs',
+                recordId: id,
+                farmId: farmId,
+                changes: params
+            });
+
             return id;
         } catch (error) {
             console.error('Failed to add spray log', error);
@@ -173,20 +186,23 @@ export const useSpray = () => {
     const addRecipe = async (recipe: Omit<Recipe, 'id'>) => {
         const id = uuidv4();
         await db.execute(
-            'INSERT INTO recipes (id, name, product_name, epa_number, rate_per_acre, water_rate_per_acre) VALUES (?, ?, ?, ?, ?, ?)',
-            [id, recipe.name, recipe.product_name, recipe.epa_number, recipe.rate_per_acre, recipe.water_rate_per_acre]
+            'INSERT INTO recipes (id, name, product_name, epa_number, rate_per_acre, water_rate_per_acre, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [id, recipe.name, recipe.product_name, recipe.epa_number, recipe.rate_per_acre, recipe.water_rate_per_acre, farmId, new Date().toISOString()]
         );
+        await recordAudit({ action: 'INSERT', tableName: 'recipes', recordId: id, farmId: farmId, changes: recipe });
     };
 
     const updateRecipe = async (id: string, recipe: Partial<Recipe>) => {
         await db.execute(
-            'UPDATE recipes SET name = ?, product_name = ?, epa_number = ?, rate_per_acre = ?, water_rate_per_acre = ? WHERE id = ?',
-            [recipe.name, recipe.product_name, recipe.epa_number, recipe.rate_per_acre, recipe.water_rate_per_acre, id]
+            'UPDATE recipes SET name = ?, product_name = ?, epa_number = ?, rate_per_acre = ?, water_rate_per_acre = ? WHERE id = ? AND farm_id = ?',
+            [recipe.name, recipe.product_name, recipe.epa_number, recipe.rate_per_acre, recipe.water_rate_per_acre, id, farmId]
         );
+        await recordAudit({ action: 'UPDATE', tableName: 'recipes', recordId: id, farmId: farmId, changes: recipe });
     };
 
     const deleteRecipe = async (id: string) => {
-        await db.execute('DELETE FROM recipes WHERE id = ?', [id]);
+        await db.execute('DELETE FROM recipes WHERE id = ? AND farm_id = ?', [id, farmId]);
+        await recordAudit({ action: 'DELETE', tableName: 'recipes', recordId: id, farmId: farmId, changes: { id } });
     };
 
     return {

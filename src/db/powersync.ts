@@ -44,6 +44,7 @@ export const AppSchema = new Schema([
             new Column({ name: 'acreage', type: ColumnType.REAL }),
             new Column({ name: 'last_gps_lat', type: ColumnType.REAL }),
             new Column({ name: 'last_gps_long', type: ColumnType.REAL }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
     }),
@@ -58,6 +59,7 @@ export const AppSchema = new Schema([
             new Column({ name: 'water_rate_per_acre', type: ColumnType.REAL }),
             new Column({ name: 'phi_days', type: ColumnType.INTEGER }),
             new Column({ name: 'rei_hours', type: ColumnType.INTEGER }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
     }),
@@ -69,6 +71,7 @@ export const AppSchema = new Schema([
             new Column({ name: 'variety_name', type: ColumnType.TEXT }),
             new Column({ name: 'type', type: ColumnType.TEXT }),
             new Column({ name: 'default_population', type: ColumnType.REAL }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
     }),
@@ -94,6 +97,7 @@ export const AppSchema = new Schema([
             new Column({ name: 'phi_days', type: ColumnType.INTEGER }),
             new Column({ name: 'rei_hours', type: ColumnType.INTEGER }),
             new Column({ name: 'notes', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
     }),
@@ -108,6 +112,7 @@ export const AppSchema = new Schema([
             new Column({ name: 'start_time', type: ColumnType.TEXT }),
             new Column({ name: 'end_time', type: ColumnType.TEXT }),
             new Column({ name: 'notes', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
     }),
@@ -118,6 +123,7 @@ export const AppSchema = new Schema([
             new Column({ name: 'name', type: ColumnType.TEXT }),
             new Column({ name: 'capacity', type: ColumnType.REAL }),
             new Column({ name: 'crop_type', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
     }),
@@ -130,11 +136,13 @@ export const AppSchema = new Schema([
             new Column({ name: 'bin_id', type: ColumnType.TEXT }),
             new Column({ name: 'destination_type', type: ColumnType.TEXT }),
             new Column({ name: 'destination_name', type: ColumnType.TEXT }),
+            new Column({ name: 'contract_id', type: ColumnType.TEXT }),
             new Column({ name: 'bushels_net', type: ColumnType.REAL }),
             new Column({ name: 'moisture', type: ColumnType.REAL }),
             new Column({ name: 'start_time', type: ColumnType.TEXT }),
             new Column({ name: 'end_time', type: ColumnType.TEXT }),
             new Column({ name: 'notes', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
     }),
@@ -147,6 +155,7 @@ export const AppSchema = new Schema([
             new Column({ name: 'price_per_bushel', type: ColumnType.REAL }),
             new Column({ name: 'delivery_deadline', type: ColumnType.TEXT }),
             new Column({ name: 'destination_name', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
     }),
@@ -157,6 +166,7 @@ export const AppSchema = new Schema([
             new Column({ name: 'product_name', type: ColumnType.TEXT }),
             new Column({ name: 'quantity_on_hand', type: ColumnType.REAL }),
             new Column({ name: 'unit', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
     }),
@@ -170,7 +180,9 @@ export const AppSchema = new Schema([
             new Column({ name: 'onboarding_completed', type: ColumnType.INTEGER }), // 0 or 1 for boolean
             new Column({ name: 'default_applicator_name', type: ColumnType.TEXT }),
             new Column({ name: 'default_applicator_cert', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'supabase_anon_key', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_join_token', type: ColumnType.TEXT }),
             new Column({ name: 'updated_at', type: ColumnType.TEXT }),
         ],
     }),
@@ -186,6 +198,7 @@ export const AppSchema = new Schema([
             new Column({ name: 'local_path', type: ColumnType.TEXT }),
             new Column({ name: 'remote_url', type: ColumnType.TEXT }),
             new Column({ name: 'status', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
     }),
@@ -198,6 +211,7 @@ export const AppSchema = new Schema([
             new Column({ name: 'record_id', type: ColumnType.TEXT }),
             new Column({ name: 'changed_by', type: ColumnType.TEXT }),
             new Column({ name: 'changes', type: ColumnType.TEXT }), // JSON string
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
     }),
@@ -207,6 +221,7 @@ export const AppSchema = new Schema([
             new Column({ name: 'id', type: ColumnType.TEXT }),
             new Column({ name: 'name', type: ColumnType.TEXT }),
             new Column({ name: 'email', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
     }),
@@ -217,6 +232,7 @@ export const AppSchema = new Schema([
             new Column({ name: 'field_id', type: ColumnType.TEXT }),
             new Column({ name: 'landlord_id', type: ColumnType.TEXT }),
             new Column({ name: 'share_percentage', type: ColumnType.REAL }), // e.g. 0.5 for 50%
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
     }),
@@ -334,10 +350,10 @@ const MobileFilePersister = {
  */
 class ExpoPowerSyncDatabase extends AbstractPowerSyncDatabase {
     async _initialize(): Promise<void> {
-        console.log('[PowerSync] DB _initialize starting...');
         try {
             // Optimized indices for Phase 3 query patterns
             await this.execute('CREATE INDEX IF NOT EXISTS idx_spray_logs_field_time ON spray_logs(field_id, start_time)');
+            // ...
             await this.execute('CREATE INDEX IF NOT EXISTS idx_grain_logs_bin_time ON grain_logs(bin_id, start_time)');
             await this.execute('CREATE INDEX IF NOT EXISTS idx_planting_logs_field_time ON planting_logs(field_id, start_time)');
             await this.execute('CREATE INDEX IF NOT EXISTS idx_attachments_owner ON attachments(owner_record_id)');
@@ -373,7 +389,7 @@ class ExpoPowerSyncDatabase extends AbstractPowerSyncDatabase {
                 },
                 disconnect: async () => { },
                 dispose: async () => { },
-                isConnected: () => true, // Show as "Synced" or "Active" on web
+                isConnected: () => false, // Default to false on web until real auth/sync is added
                 waitForReady: async () => { },
                 uploadCrud: async () => {
                     console.log('[PowerSync Mock] Propagating changes to Supabase...');

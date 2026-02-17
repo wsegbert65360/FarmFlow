@@ -1,29 +1,30 @@
 import { useState, useEffect } from 'react';
 import { db } from '../db/powersync';
+import { useSettings } from './useSettings';
 
 export interface InventoryItem {
     id: string;
     product_name: string;
     quantity_on_hand: number;
     unit: string;
+    farm_id: string;
 }
 
 export const useInventory = () => {
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
-    const [atRiskCount, setAtRiskCount] = useState(0);
     const [loading, setLoading] = useState(true);
+    const { settings } = useSettings();
+    const farmId = settings?.farm_id || 'default_farm';
+
     useEffect(() => {
         const abortController = new AbortController();
 
         db.watch(
-            'SELECT * FROM inventory',
-            [],
+            'SELECT * FROM inventory WHERE farm_id = ?',
+            [farmId],
             {
                 onResult: (result) => {
-                    const items = result.rows?._array || [];
-                    setInventory(items);
-                    const negatives = items.filter((i: InventoryItem) => i.quantity_on_hand < 0).length;
-                    setAtRiskCount(negatives);
+                    setInventory(result.rows?._array || []);
                     setLoading(false);
                 },
                 onError: (error) => {
@@ -35,7 +36,16 @@ export const useInventory = () => {
         );
 
         return () => abortController.abort();
-    }, []);
+    }, [farmId]);
 
-    return { inventory, atRiskCount, loading };
+    const updateQuantity = async (productName: string, newQuantity: number) => {
+        await db.execute(
+            'INSERT OR REPLACE INTO inventory (id, product_name, quantity_on_hand, unit, farm_id) VALUES ((SELECT id FROM inventory WHERE product_name = ? AND farm_id = ?), ?, ?, ?, ?)',
+            [productName, farmId, productName, newQuantity, 'Units', farmId]
+        );
+    };
+
+    const atRiskCount = inventory.filter(i => i.quantity_on_hand < 0).length;
+
+    return { inventory, atRiskCount, loading, updateQuantity };
 };

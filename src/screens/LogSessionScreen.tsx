@@ -164,6 +164,7 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                     bin_id: fixedId,
                     destination_type: 'ELEVATOR',
                     destination_name: contract?.destination_name || 'Direct Sale',
+                    contract_id: contract?.id,
                     bushels_net: parseFloat(bushels) || 0,
                     moisture: parseFloat(moisture) || 15.0,
                     notes: notes

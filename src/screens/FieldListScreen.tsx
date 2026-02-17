@@ -17,7 +17,7 @@ export const FieldListScreen = ({ onSelectAction }: FieldListProps) => {
     const [modalVisible, setModalVisible] = useState(false);
     const [actionPickerVisible, setActionPickerVisible] = useState(false);
     const [selectedField, setSelectedField] = useState<Field | null>(null);
-    const { landlords, setFieldShare, shares, loading: landlordsLoading } = useLandlords();
+    const { landlords, addFieldSplit, fieldSplits: shares, loading: landlordsLoading } = useLandlords();
     const [splitsModalVisible, setSplitsModalVisible] = useState(false);
     const [selectedLandlordId, setSelectedLandlordId] = useState<string>('');
     const [splitPercentage, setSplitPercentage] = useState<string>('50');
@@ -211,7 +211,7 @@ export const FieldListScreen = ({ onSelectAction }: FieldListProps) => {
                             style={[styles.saveButton, { marginTop: Theme.spacing.lg }]}
                             onPress={async () => {
                                 if (!selectedField || !selectedLandlordId) return;
-                                await setFieldShare(selectedField.id, selectedLandlordId, parseFloat(splitPercentage) / 100);
+                                await addFieldSplit(selectedField.id, selectedLandlordId, parseFloat(splitPercentage) / 100);
                                 setSplitPercentage('50');
                                 setSelectedLandlordId('');
                                 Alert.alert('Saved', 'Landlord share updated.');

@@ -34,7 +34,7 @@ export default function App() {
 
   useEffect(() => {
     // Initial status
-    setIsConnected(Platform.OS === 'web' || !!db.currentStatus?.connected);
+    setIsConnected(Platform.OS === 'web' || !!(db as any).status?.connected);
 
     // Listen for changes
     const unsubscribe = db.registerListener({
@@ -97,8 +97,10 @@ export default function App() {
           }}
         >
           <View style={[styles.syncDot, { backgroundColor: isConnected ? Theme.colors.success : Theme.colors.secondary }]} />
-          <Text style={styles.syncText}>{isConnected ? 'SYNCED' : 'OFFLINE'}</Text>
-          {!isConnected && Platform.OS !== 'web' && <Text style={[styles.syncText, { marginLeft: 4, opacity: 0.7 }]}>tap to scan</Text>}
+          <Text style={styles.syncText}>
+            {Platform.OS === 'web' ? 'LOCAL ONLY' : (isConnected ? 'SYNCED' : 'OFFLINE')}
+          </Text>
+          {Platform.OS !== 'web' && !isConnected && <Text style={[styles.syncText, { marginLeft: 4, opacity: 0.7 }]}>tap to scan</Text>}
         </TouchableOpacity>
       </View>
 
@@ -111,10 +113,15 @@ export default function App() {
                 onBarcodeScanned={(result) => {
                   try {
                     const data = JSON.parse(result.data);
-                    if (data.k) {
-                      saveSettings({ supabase_anon_key: data.k });
+                    if (data.k || data.t || data.f) {
+                      saveSettings({
+                        supabase_anon_key: data.k || '',
+                        farm_join_token: data.t || '',
+                        farm_id: data.f || '',
+                        farm_name: data.n || undefined
+                      });
                       setShowScanner(false);
-                      Alert.alert('Connected', 'Key imported! FarmFlow is now online.');
+                      Alert.alert('Connected', 'Farm credentials imported! FarmFlow is now online.');
                     }
                   } catch (e) {
                     console.error('Invalid QR', e);

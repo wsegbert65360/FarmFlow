@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
 import { db } from '../db/powersync';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface Settings {
     farm_name: string;
     state: string;
     units: 'US' | 'Metric';
     onboarding_completed: boolean;
-    default_applicator_name: string;
-    default_applicator_cert: string;
-    supabase_anon_key: string;
+    default_applicator_name?: string;
+    default_applicator_cert?: string;
+    farm_id: string;
+    supabase_anon_key?: string;
+    farm_join_token?: string;
 }
 
 export const useSettings = () => {
@@ -18,18 +21,11 @@ export const useSettings = () => {
     useEffect(() => {
         const abortController = new AbortController();
 
-        // Safety timeout to prevent infinite loading spinner
-        const timeout = setTimeout(() => {
-            console.warn('[useSettings] Loading timeout reached. Forcing loading false.');
-            setLoading(false);
-        }, 5000);
-
         db.watch(
             'SELECT * FROM settings WHERE id = ?',
             ['farm_config'],
             {
                 onResult: (result) => {
-                    clearTimeout(timeout);
                     const rows = result.rows?._array || [];
                     if (rows.length > 0) {
                         const row = rows[0];
@@ -41,12 +37,13 @@ export const useSettings = () => {
                             default_applicator_name: row.default_applicator_name || '',
                             default_applicator_cert: row.default_applicator_cert || '',
                             supabase_anon_key: row.supabase_anon_key || '',
+                            farm_join_token: row.farm_join_token || '',
+                            farm_id: row.farm_id || '',
                         });
                     }
                     setLoading(false);
                 },
                 onError: (error) => {
-                    clearTimeout(timeout);
                     console.error('Failed to watch settings', error);
                     setLoading(false);
                 }
@@ -54,32 +51,42 @@ export const useSettings = () => {
             { signal: abortController.signal }
         );
 
-        return () => {
-            clearTimeout(timeout);
-            abortController.abort();
-        };
+        return () => abortController.abort();
     }, []);
 
-    const saveSettings = async (newSettings: Partial<Settings>) => {
+    const saveSettings = async (updated: Partial<Settings>) => {
         try {
-            const current = settings || { farm_name: '', state: '', units: 'US', onboarding_completed: false };
-            const updated = { ...current, ...newSettings } as Settings;
+            const current = settings || {
+                farm_name: '',
+                state: '',
+                units: 'Metric', // Default to Metric if unknown
+                onboarding_completed: false,
+                farm_id: uuidv4(),
+                default_applicator_name: '',
+                default_applicator_cert: '',
+                supabase_anon_key: '',
+                farm_join_token: ''
+            };
+
+            const merged = { ...current, ...updated };
+
             await db.execute(
-                `INSERT OR REPLACE INTO settings (id, farm_name, state, units, onboarding_completed, default_applicator_name, default_applicator_cert, supabase_anon_key, updated_at) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT OR REPLACE INTO settings (id, farm_name, state, units, onboarding_completed, default_applicator_name, default_applicator_cert, farm_id, supabase_anon_key, farm_join_token, updated_at) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     'farm_config',
-                    updated.farm_name,
-                    updated.state,
-                    updated.units,
-                    updated.onboarding_completed ? 1 : 0,
-                    updated.default_applicator_name || '',
-                    updated.default_applicator_cert || '',
-                    updated.supabase_anon_key || '',
+                    merged.farm_name,
+                    merged.state,
+                    merged.units,
+                    merged.onboarding_completed ? 1 : 0,
+                    merged.default_applicator_name,
+                    merged.default_applicator_cert,
+                    merged.farm_id,
+                    merged.supabase_anon_key,
+                    merged.farm_join_token,
                     new Date().toISOString(),
                 ]
             );
-            // No manual setSettings needed! The watch will trigger the update.
         } catch (error) {
             console.error('Failed to save settings', error);
             throw error;

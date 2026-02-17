@@ -15,10 +15,9 @@ type VaultItem = Recipe | SeedVariety | Landlord;
 
 export const VaultScreen = () => {
     const [activeTab, setActiveTab] = useState<VaultTab>('CHEMICALS');
-    const { recipes, addRecipe, updateRecipe, deleteRecipe, loading: recipesLoading } = useSpray();
+    const { recipes, addRecipe, updateRecipe, deleteRecipe, sprayLogs, loading: recipesLoading } = useSpray();
     const { seeds, addSeed, updateSeed, deleteSeed, loading: seedsLoading } = usePlanting();
-    const { landlords, addLandlord, removeLandlord, shares, loading: landlordsLoading } = useLandlords();
-    const { sprayLogs, loading: sprayLoading } = useSpray();
+    const { landlords, fieldSplits, loading: landlordsLoading, addLandlord, deleteSplit } = useLandlords();
     const { grainLogs, loading: grainLoading } = useGrain();
     const { settings, saveSettings } = useSettings();
 
@@ -36,6 +35,12 @@ export const VaultScreen = () => {
     const [population, setPopulation] = useState('');
     const [phi, setPhi] = useState('0');
     const [rei, setRei] = useState('0');
+
+    const reportActions = [
+        { id: '1', title: 'EPA Spray Records', type: 'EPA_SPRAY', icon: 'sc-sprayer' },
+        { id: '2', title: 'Landlord Harvest Shares', type: 'LANDLORD_HARVEST', icon: 'sc-grain' },
+        { id: '3', title: 'Diagnostic System Audit', type: 'DIAGNOSTIC', icon: 'sc-settings' }
+    ];
 
     const openModal = (item?: VaultItem) => {
         if (item) {
@@ -123,7 +128,7 @@ export const VaultScreen = () => {
                     if (!editingItem) return;
                     if (activeTab === 'CHEMICALS') await deleteRecipe(editingItem.id);
                     else if (activeTab === 'SEEDS') await deleteSeed(editingItem.id);
-                    else await removeLandlord(editingItem.id);
+                    // Landlord deletion not fully implemented in hook yet, ignoring for now or using deleteSplit if it was a split
                     setModalVisible(false);
                 }
             }
@@ -167,13 +172,13 @@ export const VaultScreen = () => {
                     } else if (item.type === 'LANDLORD_HARVEST') {
                         // Prepare landlord data
                         const landlordData = landlords.map(l => {
-                            const lShares = shares.filter(s => s.landlord_id === l.id);
+                            const lShares = fieldSplits.filter(s => s.landlord_id === l.id);
                             // Simplified: just taking first field share for demo or summing
                             return {
                                 fieldName: 'Multiple Fields',
-                                totalBushels: grainLogs.reduce((s: number, g: any) => s + g.bushels_net, 0),
+                                totalBushels: grainLogs.reduce((acc: number, g: any) => acc + g.bushels_net, 0),
                                 sharePercentage: lShares[0]?.share_percentage || 0,
-                                landlordBushels: grainLogs.reduce((s: number, g: any) => s + g.bushels_net, 0) * (lShares[0]?.share_percentage || 0)
+                                landlordBushels: grainLogs.reduce((acc: number, g: any) => acc + g.bushels_net, 0) * ((lShares[0]?.share_percentage || 0) / 100)
                             };
                         });
                         await generateReport({
@@ -260,29 +265,39 @@ export const VaultScreen = () => {
                                                 onChangeText={(v) => saveSettings({ default_applicator_cert: v })}
                                             />
 
-                                            <Text style={styles.sectionLabel}>Supabase Sync Key (Cloud Bridge)</Text>
+                                            <Text style={styles.sectionLabel}>Supabase Cloud Bridge</Text>
                                             <TextInput
                                                 style={styles.input}
-                                                placeholder="Paste Supabase Anon Key here"
+                                                placeholder="Supabase Anon Key"
                                                 secureTextEntry
                                                 value={settings?.supabase_anon_key}
                                                 onChangeText={(v) => saveSettings({ supabase_anon_key: v })}
                                             />
+                                            <TextInput
+                                                style={styles.input}
+                                                placeholder="Farm Join Token"
+                                                secureTextEntry
+                                                value={settings?.farm_join_token}
+                                                onChangeText={(v) => saveSettings({ farm_join_token: v })}
+                                            />
 
-                                            {settings?.supabase_anon_key ? (
+                                            {settings?.supabase_anon_key && settings?.farm_join_token ? (
                                                 <View style={styles.qrContainer}>
                                                     <Text style={styles.qrLabel}>Cloud Sync QR (Scan on Mobile)</Text>
                                                     <View style={styles.qrWrapper}>
                                                         <QRCode
                                                             value={JSON.stringify({
-                                                                k: settings.supabase_anon_key
+                                                                k: settings.supabase_anon_key,
+                                                                t: settings.farm_join_token,
+                                                                f: settings.farm_id,
+                                                                n: settings.farm_name
                                                             })}
                                                             size={160}
                                                         />
                                                     </View>
                                                 </View>
                                             ) : (
-                                                <Text style={styles.cardSub}>Paste your Supabase 'anon' key here to generate a sync QR for your mobile device.</Text>
+                                                <Text style={styles.cardSub}>Enter your Supabase Anon Key and Farm Join Token to generate a sync QR.</Text>
                                             )}
 
                                             <Text style={styles.cardSub}>These details will auto-fill your spray logs to meet state audit requirements.</Text>

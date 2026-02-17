@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
 import { db } from '../db/powersync';
 import { v4 as uuidv4 } from 'uuid';
+import { useSettings } from './useSettings';
 import { recordAudit } from '../utils/DatabaseUtility';
 
 export interface Landlord {
     id: string;
     name: string;
-    email?: string;
-    created_at: string;
+    email: string;
 }
 
-export interface LandlordShare {
+export interface FieldSplit {
     id: string;
     field_id: string;
     landlord_id: string;
@@ -19,71 +19,68 @@ export interface LandlordShare {
 
 export const useLandlords = () => {
     const [landlords, setLandlords] = useState<Landlord[]>([]);
-    const [shares, setShares] = useState<LandlordShare[]>([]);
+    const [fieldSplits, setFieldSplits] = useState<FieldSplit[]>([]);
     const [loading, setLoading] = useState(true);
+    const { settings } = useSettings();
+    const farmId = settings?.farm_id || 'default_farm';
 
     useEffect(() => {
         const abortController = new AbortController();
 
         // Watch Landlords
         db.watch(
-            'SELECT * FROM landlords ORDER BY name ASC',
-            [],
+            'SELECT * FROM landlords WHERE farm_id = ?',
+            [farmId],
             {
                 onResult: (result) => setLandlords(result.rows?._array || []),
-                onError: (e) => console.error('Failed to watch landlords', e)
+                onError: (error) => console.error('Failed to watch landlords', error)
             },
             { signal: abortController.signal }
         );
 
-        // Watch Shares
+        // Watch Splits
         db.watch(
-            'SELECT * FROM landlord_shares',
-            [],
+            'SELECT * FROM landlord_shares WHERE farm_id = ?',
+            [farmId],
             {
-                onResult: (result) => setShares(result.rows?._array || []),
-                onError: (e) => console.error('Failed to watch landlord_shares', e)
+                onResult: (result) => {
+                    setFieldSplits(result.rows?._array || []);
+                    setLoading(false);
+                },
+                onError: (error) => {
+                    console.error('Failed to watch landlord_shares', error);
+                    setLoading(false);
+                }
             },
             { signal: abortController.signal }
         );
 
-        setLoading(false);
         return () => abortController.abort();
-    }, []);
+    }, [farmId]);
 
-    const addLandlord = async (name: string, email?: string) => {
+    const addLandlord = async (name: string, email: string) => {
         const id = uuidv4();
         await db.execute(
-            'INSERT INTO landlords (id, name, email, created_at) VALUES (?, ?, ?, ?)',
-            [id, name, email || null, new Date().toISOString()]
+            'INSERT INTO landlords (id, name, email, farm_id, created_at) VALUES (?, ?, ?, ?, ?)',
+            [id, name, email, farmId, new Date().toISOString()]
         );
-        await recordAudit({ action: 'INSERT', tableName: 'landlords', recordId: id, changes: { name, email } });
+        await recordAudit({ action: 'INSERT', tableName: 'landlords', recordId: id, farmId: farmId, changes: { name, email } });
         return id;
     };
 
-    const setFieldShare = async (fieldId: string, landlordId: string, percentage: number) => {
+    const addFieldSplit = async (fieldId: string, landlordId: string, percentage: number) => {
         const id = uuidv4();
-        // Delete existing share for this landlord on this field if any (simplified)
-        await db.execute('DELETE FROM landlord_shares WHERE field_id = ? AND landlord_id = ?', [fieldId, landlordId]);
-
         await db.execute(
-            'INSERT INTO landlord_shares (id, field_id, landlord_id, share_percentage, created_at) VALUES (?, ?, ?, ?, ?)',
-            [id, fieldId, landlordId, percentage, new Date().toISOString()]
+            'INSERT INTO landlord_shares (id, field_id, landlord_id, share_percentage, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            [id, fieldId, landlordId, percentage, farmId, new Date().toISOString()]
         );
-        await recordAudit({ action: 'INSERT', tableName: 'landlord_shares', recordId: id, changes: { fieldId, landlordId, percentage } });
+        await recordAudit({ action: 'INSERT', tableName: 'landlord_shares', recordId: id, farmId: farmId, changes: { fieldId, landlordId, percentage } });
     };
 
-    const removeLandlord = async (id: string) => {
-        await db.execute('DELETE FROM landlords WHERE id = ?', [id]);
-        await db.execute('DELETE FROM landlord_shares WHERE landlord_id = ?', [id]);
+    const deleteSplit = async (id: string) => {
+        await db.execute('DELETE FROM landlord_shares WHERE id = ? AND farm_id = ?', [id, farmId]);
+        await recordAudit({ action: 'DELETE', tableName: 'landlord_shares', recordId: id, farmId: farmId, changes: { id } });
     };
 
-    return {
-        landlords,
-        shares,
-        loading,
-        addLandlord,
-        setFieldShare,
-        removeLandlord
-    };
+    return { landlords, fieldSplits, loading, addLandlord, addFieldSplit, deleteSplit };
 };

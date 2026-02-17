@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { db } from '../db/powersync';
 import { v4 as uuidv4 } from 'uuid';
+import { useSettings } from './useSettings';
+import { recordAudit } from '../utils/DatabaseUtility';
 
 export interface SeedVariety {
     id: string;
@@ -24,14 +26,16 @@ export const usePlanting = () => {
     const [seeds, setSeeds] = useState<SeedVariety[]>([]);
     const [plantingLogs, setPlantingLogs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const { settings } = useSettings();
+    const farmId = settings?.farm_id || 'default_farm';
 
     useEffect(() => {
         const abortController = new AbortController();
 
         // Watch seeds
         db.watch(
-            'SELECT * FROM seed_varieties',
-            [],
+            'SELECT * FROM seed_varieties WHERE farm_id = ?',
+            [farmId],
             {
                 onResult: (result) => setSeeds(result.rows?._array || []),
                 onError: (e) => console.error('Failed to watch seeds', e)
@@ -45,8 +49,9 @@ export const usePlanting = () => {
              FROM planting_logs pl
              LEFT JOIN seed_varieties sv ON pl.seed_id = sv.id
              LEFT JOIN fields f ON pl.field_id = f.id
+             WHERE pl.farm_id = ?
              ORDER BY pl.start_time DESC`,
-            [],
+            [farmId],
             {
                 onResult: (result) => {
                     setPlantingLogs(result.rows?._array || []);
@@ -58,7 +63,7 @@ export const usePlanting = () => {
         );
 
         return () => abortController.abort();
-    }, []);
+    }, [farmId]);
 
     const addPlantingLog = async (params: {
         fieldId: string;
@@ -73,29 +78,38 @@ export const usePlanting = () => {
 
             // 1. Insert the log
             await db.execute(
-                'INSERT INTO planting_logs (id, field_id, seed_id, population, depth, start_time, end_time, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [id, params.fieldId, params.seedId, params.population, params.depth, now, now, params.notes || null, now]
+                'INSERT INTO planting_logs (id, field_id, seed_id, population, depth, start_time, end_time, notes, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [id, params.fieldId, params.seedId, params.population, params.depth, now, now, params.notes || null, farmId, now]
             );
 
             // 2. Passive Inventory Update
-            const seedResult = await db.execute('SELECT brand, variety_name FROM seed_varieties WHERE id = ?', [params.seedId]);
+            const seedResult = await db.execute('SELECT brand, variety_name FROM seed_varieties WHERE id = ? AND farm_id = ?', [params.seedId, farmId]);
             const seed = seedResult.rows?._array[0];
-            const fieldResult = await db.execute('SELECT acreage FROM fields WHERE id = ?', [params.fieldId]);
+            const fieldResult = await db.execute('SELECT acreage FROM fields WHERE id = ? AND farm_id = ?', [params.fieldId, farmId]);
             const acreage = fieldResult.rows?._array[0]?.acreage || 0;
 
             if (seed) {
                 const productName = `${seed.brand} ${seed.variety_name}`;
                 const totalUsage = (params.population * acreage) / 80000;
 
-                const invResult = await db.execute('SELECT quantity_on_hand FROM inventory WHERE product_name = ?', [productName]);
+                const invResult = await db.execute('SELECT quantity_on_hand FROM inventory WHERE product_name = ? AND farm_id = ?', [productName, farmId]);
                 const currentQty = invResult.rows?._array[0]?.quantity_on_hand || 0;
                 const newQty = currentQty - totalUsage;
 
                 await db.execute(
-                    'INSERT OR REPLACE INTO inventory (id, product_name, quantity_on_hand, unit) VALUES ((SELECT id FROM inventory WHERE product_name = ?), ?, ?, ?)',
-                    [productName, productName, newQty, 'Units']
+                    'INSERT OR REPLACE INTO inventory (id, product_name, quantity_on_hand, unit, farm_id) VALUES ((SELECT id FROM inventory WHERE product_name = ? AND farm_id = ?), ?, ?, ?, ?)',
+                    [productName, farmId, productName, newQty, 'Units', farmId]
                 );
             }
+
+            await recordAudit({
+                action: 'INSERT',
+                tableName: 'planting_logs',
+                recordId: id,
+                farmId: farmId,
+                changes: params
+            });
+
             return id;
         } catch (error) {
             console.error('Failed to add planting log', error);
@@ -106,20 +120,23 @@ export const usePlanting = () => {
     const addSeed = async (seed: Omit<SeedVariety, 'id'>) => {
         const id = uuidv4();
         await db.execute(
-            'INSERT INTO seed_varieties (id, brand, variety_name, type, default_population) VALUES (?, ?, ?, ?, ?)',
-            [id, seed.brand, seed.variety_name, seed.type, seed.default_population]
+            'INSERT INTO seed_varieties (id, brand, variety_name, type, default_population, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [id, seed.brand, seed.variety_name, seed.type, seed.default_population, farmId, new Date().toISOString()]
         );
+        await recordAudit({ action: 'INSERT', tableName: 'seed_varieties', recordId: id, farmId: farmId, changes: seed });
     };
 
     const updateSeed = async (id: string, seed: Partial<SeedVariety>) => {
         await db.execute(
-            'UPDATE seed_varieties SET brand = ?, variety_name = ?, type = ?, default_population = ? WHERE id = ?',
-            [seed.brand, seed.variety_name, seed.type, seed.default_population, id]
+            'UPDATE seed_varieties SET brand = ?, variety_name = ?, type = ?, default_population = ? WHERE id = ? AND farm_id = ?',
+            [seed.brand, seed.variety_name, seed.type, seed.default_population, id, farmId]
         );
+        await recordAudit({ action: 'UPDATE', tableName: 'seed_varieties', recordId: id, farmId: farmId, changes: seed });
     };
 
     const deleteSeed = async (id: string) => {
-        await db.execute('DELETE FROM seed_varieties WHERE id = ?', [id]);
+        await db.execute('DELETE FROM seed_varieties WHERE id = ? AND farm_id = ?', [id, farmId]);
+        await recordAudit({ action: 'DELETE', tableName: 'seed_varieties', recordId: id, farmId: farmId, changes: { id } });
     };
 
     return {

@@ -1,24 +1,26 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { db } from '../db/powersync';
-import * as Location from 'expo-location';
 import { v4 as uuidv4 } from 'uuid';
-import { useFieldSelectors } from '../db/selectors';
+import { useSettings } from './useSettings';
+import { recordAudit } from '../utils/DatabaseUtility';
+import * as Location from 'expo-location';
 
 export interface Field {
     id: string;
     name: string;
     acreage: number;
-    last_gps_lat: number | null;
-    last_gps_long: number | null;
+    last_gps_lat?: number;
+    last_gps_long?: number;
     distance?: number;
 }
 
 export const useFields = () => {
-    const [rawFields, setRawFields] = useState<Field[]>([]);
+    const [fields, setFields] = useState<Field[]>([]);
     const [loading, setLoading] = useState(true);
     const [userLoc, setUserLoc] = useState<Location.LocationObject | null>(null);
+    const { settings } = useSettings();
+    const farmId = settings?.farm_id || 'default_farm';
 
-    // 1. Initial location capture
     useEffect(() => {
         const getLoc = async () => {
             try {
@@ -38,16 +40,15 @@ export const useFields = () => {
         getLoc();
     }, []);
 
-    // 2. Watch database for changes
     useEffect(() => {
         const abortController = new AbortController();
 
         db.watch(
-            'SELECT * FROM fields',
-            [],
+            'SELECT * FROM fields WHERE farm_id = ?',
+            [farmId],
             {
                 onResult: (result) => {
-                    setRawFields(result.rows?._array || []);
+                    setFields(result.rows?._array || []);
                     setLoading(false);
                 },
                 onError: (error) => {
@@ -59,64 +60,69 @@ export const useFields = () => {
         );
 
         return () => abortController.abort();
-    }, []);
+    }, [farmId]);
 
-    // 3. Derive sorted fields (Smart Context)
-    const fields = useMemo(() => {
-        const fieldList = rawFields.map((f: Field) => {
-            if (userLoc && f.last_gps_lat && f.last_gps_long) {
-                const dist = calculateDistance(
-                    userLoc.coords.latitude,
-                    userLoc.coords.longitude,
-                    f.last_gps_lat,
-                    f.last_gps_long
-                );
-                return { ...f, distance: dist };
-            }
-            return { ...f, distance: Infinity };
-        });
-
-        // Sort by distance (proximity)
-        return fieldList.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
-    }, [rawFields, userLoc]);
-
-    // 4. Reactive Selector Layer
-    const selectors = useFieldSelectors(fields);
-
-    const addField = async (name: string, acreage: number) => {
+    const addField = async (name: string, acreage: number, lat?: number, long?: number) => {
         try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            let lat = null;
-            let long = null;
-            if (status === 'granted') {
-                const loc = await Location.getCurrentPositionAsync({});
-                lat = loc.coords.latitude;
-                long = loc.coords.longitude;
-            }
-
             const id = uuidv4();
             await db.execute(
-                'INSERT INTO fields (id, name, acreage, last_gps_lat, last_gps_long, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-                [id, name, acreage, lat, long, new Date().toISOString()]
+                'INSERT INTO fields (id, name, acreage, last_gps_lat, last_gps_long, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [id, name, acreage, lat || null, long || null, farmId, new Date().toISOString()]
             );
+            await recordAudit({
+                action: 'INSERT',
+                tableName: 'fields',
+                recordId: id,
+                farmId: farmId,
+                changes: { name, acreage, lat, long }
+            });
+            return id;
         } catch (error) {
             console.error('Failed to add field', error);
             throw error;
         }
     };
 
-    return { fields, loading, addField, selectors };
-};
+    const updateField = async (id: string, name: string, acreage: number, lat?: number, long?: number) => {
+        try {
+            await db.execute(
+                'UPDATE fields SET name = ?, acreage = ?, last_gps_lat = ?, last_gps_long = ? WHERE id = ? AND farm_id = ?',
+                [name, acreage, lat || null, long || null, id, farmId]
+            );
+            await recordAudit({
+                action: 'UPDATE',
+                tableName: 'fields',
+                recordId: id,
+                farmId: farmId,
+                changes: { name, acreage, lat, long }
+            });
+        } catch (error) {
+            console.error('Failed to update field', error);
+            throw error;
+        }
+    };
 
-// Haversine formula for distance calculation (Miles)
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-    const R = 3958.8; // Miles
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-}
+    const deleteField = async (id: string) => {
+        try {
+            await db.execute('DELETE FROM fields WHERE id = ? AND farm_id = ?', [id, farmId]);
+            await recordAudit({
+                action: 'DELETE',
+                tableName: 'fields',
+                recordId: id,
+                farmId: farmId,
+                changes: { id }
+            });
+        } catch (error) {
+            console.error('Failed to delete field', error);
+            throw error;
+        }
+    };
+
+    return {
+        fields,
+        loading,
+        addField,
+        updateField,
+        deleteField
+    };
+};

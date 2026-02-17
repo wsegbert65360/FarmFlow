@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../db/powersync';
 import { v4 as uuidv4 } from 'uuid';
-import { useGrainSelectors } from '../db/selectors';
+import { useSettings } from './useSettings';
 import { recordAudit } from '../utils/DatabaseUtility';
 
 export interface Bin {
@@ -14,106 +14,124 @@ export interface Bin {
 
 export interface GrainLog {
     id: string;
-    type: 'HARVEST' | 'DELIVERY';
-    field_id?: string;
-    bin_id?: string;
-    destination_type: 'BIN' | 'ELEVATOR';
-    destination_name?: string;
-    bushels_net: number;
+    bin_id: string;
+    field_id: string;
+    contract_id?: string;
+    quantity: number;
     moisture: number;
-    notes?: string;
     start_time: string;
+    end_time: string | null;
 }
 
 export const useGrain = () => {
     const [bins, setBins] = useState<Bin[]>([]);
-    const [rawLogs, setRawLogs] = useState<GrainLog[]>([]);
+    const [grainLogs, setGrainLogs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const { settings } = useSettings();
+    const farmId = settings?.farm_id || 'default_farm';
 
     useEffect(() => {
         const abortController = new AbortController();
 
-        // Watch Bins with current level
-        const binQuery = `
-            SELECT 
-                b.*, 
-                COALESCE((SELECT SUM(bushels_net) FROM grain_logs WHERE bin_id = b.id AND type = 'HARVEST'), 0) -
-                COALESCE((SELECT SUM(bushels_net) FROM grain_logs WHERE bin_id = b.id AND type = 'DELIVERY'), 0) as current_level
-            FROM bins b
-        `;
-
+        // Watch bins with level calculation
         db.watch(
-            binQuery,
-            [],
+            `SELECT b.*, COALESCE((SELECT SUM(quantity) FROM grain_logs WHERE bin_id = b.id), 0) as current_level
+             FROM bins b 
+             WHERE b.farm_id = ?`,
+            [farmId],
             {
                 onResult: (result) => {
                     setBins(result.rows?._array || []);
-                    setLoading(false);
                 },
-                onError: (error) => {
-                    console.error('Failed to watch bins', error);
-                    setLoading(false);
-                }
+                onError: (e) => console.error('Failed to watch bins', e)
             },
             { signal: abortController.signal }
         );
 
-        // Watch Logs for reactive stats
+        // Watch grain_logs with joins
         db.watch(
-            'SELECT * FROM grain_logs ORDER BY start_time DESC LIMIT 100',
-            [],
+            `SELECT gl.*, b.name as bin_name, f.name as field_name, c.contract_number
+             FROM grain_logs gl
+             LEFT JOIN bins b ON gl.bin_id = b.id
+             LEFT JOIN fields f ON gl.field_id = f.id
+             LEFT JOIN contracts c ON gl.contract_id = c.id
+             WHERE gl.farm_id = ?
+             ORDER BY gl.start_time DESC`,
+            [farmId],
             {
                 onResult: (result) => {
-                    setRawLogs(result.rows?._array || []);
+                    setGrainLogs(result.rows?._array || []);
+                    setLoading(false);
                 },
-                onError: (error) => console.error('Failed to watch grain_logs', error)
+                onError: (e) => console.error('Failed to watch grain_logs', e)
             },
             { signal: abortController.signal }
         );
 
         return () => abortController.abort();
-    }, []);
-
-    // Reactive Selector Layer
-    const selectors = useGrainSelectors(bins, rawLogs);
+    }, [farmId]);
 
     const addGrainLog = async (log: Omit<GrainLog, 'id' | 'start_time'>) => {
-        const id = uuidv4();
-        await db.execute(
-            `INSERT INTO grain_logs (id, type, field_id, bin_id, destination_type, destination_name, bushels_net, moisture, notes, start_time, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [id, log.type, log.field_id, log.bin_id, log.destination_type, log.destination_name, log.bushels_net, log.moisture, log.notes || null, new Date().toISOString(), new Date().toISOString()]
-        );
-
-        // Record Audit Trail
-        await recordAudit({
-            action: 'INSERT',
-            tableName: 'grain_logs',
-            recordId: id,
-            changes: log
-        });
-
-        return id;
+        try {
+            const id = uuidv4();
+            const now = new Date().toISOString();
+            await db.execute(
+                'INSERT INTO grain_logs (id, bin_id, field_id, contract_id, quantity, moisture, start_time, end_time, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [id, log.bin_id, log.field_id, log.contract_id || null, log.quantity, log.moisture, now, now, farmId, now]
+            );
+            await recordAudit({ action: 'INSERT', tableName: 'grain_logs', recordId: id, farmId: farmId, changes: log });
+            return id;
+        } catch (error) {
+            console.error('Failed to add grain log', error);
+            throw error;
+        }
     };
 
-    const createBin = async (name: string, capacity: number, cropType: string) => {
-        const id = uuidv4();
-        await db.execute(
-            'INSERT INTO bins (id, name, capacity, crop_type, created_at) VALUES (?, ?, ?, ?, ?)',
-            [id, name, capacity, cropType, new Date().toISOString()]
-        );
+    const addBin = async (name: string, capacity: number, crop_type: string) => {
+        try {
+            const id = uuidv4();
+            await db.execute(
+                'INSERT INTO bins (id, name, capacity, crop_type, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+                [id, name, capacity, crop_type, farmId, new Date().toISOString()]
+            );
+            await recordAudit({ action: 'INSERT', tableName: 'bins', recordId: id, farmId: farmId, changes: { name, capacity, crop_type } });
+            return id;
+        } catch (error) {
+            console.error('Failed to add bin', error);
+            throw error;
+        }
     };
 
-    const updateBin = async (id: string, name: string, capacity: number, cropType: string) => {
-        await db.execute(
-            'UPDATE bins SET name = ?, capacity = ?, crop_type = ? WHERE id = ?',
-            [name, capacity, cropType, id]
-        );
+    const updateBin = async (id: string, name: string, capacity: number, crop_type: string) => {
+        try {
+            await db.execute(
+                'UPDATE bins SET name = ?, capacity = ?, crop_type = ? WHERE id = ? AND farm_id = ?',
+                [name, capacity, crop_type, id, farmId]
+            );
+            await recordAudit({ action: 'UPDATE', tableName: 'bins', recordId: id, farmId: farmId, changes: { name, capacity, crop_type } });
+        } catch (error) {
+            console.error('Failed to update bin', error);
+            throw error;
+        }
     };
 
     const deleteBin = async (id: string) => {
-        await db.execute('DELETE FROM bins WHERE id = ?', [id]);
+        try {
+            await db.execute('DELETE FROM bins WHERE id = ? AND farm_id = ?', [id, farmId]);
+            await recordAudit({ action: 'DELETE', tableName: 'bins', recordId: id, farmId: farmId, changes: { id } });
+        } catch (error) {
+            console.error('Failed to delete bin', error);
+            throw error;
+        }
     };
 
-    return { bins, grainLogs: rawLogs, loading, addGrainLog, createBin, updateBin, deleteBin, selectors };
+    return {
+        bins,
+        grainLogs,
+        loading,
+        addGrainLog,
+        addBin,
+        updateBin,
+        deleteBin
+    };
 };
