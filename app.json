@@ -13,7 +13,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.farmflow.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "FarmFlow uses your location to sort fields by proximity and log activities at your current location."
+      }
     },
     "android": {
       "adaptiveIcon": {

@@ -6,13 +6,43 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "postinstall": "node scripts/patch-svg.js"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~6.1.2",
+    "@powersync/adapter-sql-js": "^0.0.14",
+    "@powersync/react-native": "^1.29.0",
+    "@react-native-community/netinfo": "^11.4.1",
+    "@supabase/supabase-js": "^2.95.3",
+    "dexie": "^4.3.0",
     "expo": "~54.0.33",
+    "expo-camera": "~17.0.10",
+    "expo-constants": "^18.0.13",
+    "expo-file-system": "~19.0.21",
+    "expo-location": "^19.0.8",
+    "expo-print": "~15.0.8",
+    "expo-sharing": "~14.0.8",
+    "expo-sqlite": "^16.0.10",
     "expo-status-bar": "~3.0.9",
+    "mdn-data": "2.0.14",
     "react": "19.1.0",
-    "react-native": "0.81.5"
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-get-random-values": "~1.11.0",
+    "react-native-qrcode-svg": "^6.3.21",
+    "react-native-svg": "15.12.1",
+    "react-native-web": "^0.21.0",
+    "sql.js": "^1.14.0",
+    "uuid": "^13.0.0",
+    "zod": "3.23.8"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "@types/react-native": "^0.72.8",
+    "@types/uuid": "^10.0.0",
+    "babel-preset-expo": "^54.0.10",
+    "typescript": "^5.9.3"
+  }
 }
