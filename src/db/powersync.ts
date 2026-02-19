@@ -114,8 +114,11 @@ export const AppSchema = new Schema([
             new Column({ name: 'id', type: ColumnType.TEXT }),
             new Column({ name: 'field_id', type: ColumnType.TEXT }),
             new Column({ name: 'recipe_id', type: ColumnType.TEXT }),
-            new Column({ name: 'start_time', type: ColumnType.TEXT }),
-            new Column({ name: 'end_time', type: ColumnType.TEXT }),
+            new Column({ name: 'sprayed_at', type: ColumnType.TEXT }),
+            new Column({ name: 'weather_source', type: ColumnType.TEXT }),
+            new Column({ name: 'voided_at', type: ColumnType.TEXT }),
+            new Column({ name: 'void_reason', type: ColumnType.TEXT }),
+            new Column({ name: 'replaces_log_id', type: ColumnType.TEXT }),
             new Column({ name: 'total_gallons', type: ColumnType.REAL }),
             new Column({ name: 'total_product', type: ColumnType.REAL }),
             new Column({ name: 'weather_temp', type: ColumnType.REAL }),
@@ -132,6 +135,26 @@ export const AppSchema = new Schema([
             new Column({ name: 'notes', type: ColumnType.TEXT }),
             new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
+            new Column({ name: 'updated_at', type: ColumnType.TEXT }),
+            new Column({ name: 'start_time', type: ColumnType.TEXT }),
+            new Column({ name: 'end_time', type: ColumnType.TEXT }),
+        ],
+    }),
+    new Table({
+        name: 'spray_log_items',
+        columns: [
+            new Column({ name: 'id', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
+            new Column({ name: 'spray_log_id', type: ColumnType.TEXT }),
+            new Column({ name: 'product_name', type: ColumnType.TEXT }),
+            new Column({ name: 'epa_number', type: ColumnType.TEXT }),
+            new Column({ name: 'rate', type: ColumnType.REAL }),
+            new Column({ name: 'rate_unit', type: ColumnType.TEXT }),
+            new Column({ name: 'total_amount', type: ColumnType.REAL }),
+            new Column({ name: 'total_unit', type: ColumnType.TEXT }),
+            new Column({ name: 'sort_order', type: ColumnType.INTEGER }),
+            new Column({ name: 'created_at', type: ColumnType.TEXT }),
+            new Column({ name: 'updated_at', type: ColumnType.TEXT }),
         ],
     }),
     new Table({
@@ -146,6 +169,10 @@ export const AppSchema = new Schema([
             new Column({ name: 'end_time', type: ColumnType.TEXT }),
             new Column({ name: 'notes', type: ColumnType.TEXT }),
             new Column({ name: 'farm_id', type: ColumnType.TEXT }),
+            new Column({ name: 'voided_at', type: ColumnType.TEXT }),
+            new Column({ name: 'void_reason', type: ColumnType.TEXT }),
+            new Column({ name: 'replaces_log_id', type: ColumnType.TEXT }),
+            new Column({ name: 'planted_at', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
     }),
@@ -281,6 +308,74 @@ export const AppSchema = new Schema([
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
     }),
+    new Table({
+        name: 'rent_agreements',
+        columns: [
+            new Column({ name: 'id', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
+            new Column({ name: 'landlord_id', type: ColumnType.TEXT }),
+            new Column({ name: 'crop_year', type: ColumnType.INTEGER }),
+            new Column({ name: 'rent_type', type: ColumnType.TEXT }),
+            new Column({ name: 'landlord_share_pct', type: ColumnType.REAL }),
+            new Column({ name: 'cash_rent_per_acre', type: ColumnType.REAL }),
+            new Column({ name: 'cash_rent_total', type: ColumnType.REAL }),
+            new Column({ name: 'split_basis', type: ColumnType.TEXT }),
+            new Column({ name: 'created_at', type: ColumnType.TEXT }),
+            new Column({ name: 'updated_at', type: ColumnType.TEXT }),
+        ],
+    }),
+    new Table({
+        name: 'agreement_fields',
+        columns: [
+            new Column({ name: 'agreement_id', type: ColumnType.TEXT }),
+            new Column({ name: 'field_id', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
+        ],
+    }),
+    new Table({
+        name: 'grain_lots',
+        columns: [
+            new Column({ name: 'id', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
+            new Column({ name: 'crop_type', type: ColumnType.TEXT }),
+            new Column({ name: 'crop_year', type: ColumnType.INTEGER }),
+            new Column({ name: 'source_field_id', type: ColumnType.TEXT }),
+            new Column({ name: 'created_at', type: ColumnType.TEXT }),
+            new Column({ name: 'updated_at', type: ColumnType.TEXT }),
+        ],
+    }),
+    new Table({
+        name: 'lot_movements',
+        columns: [
+            new Column({ name: 'id', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
+            new Column({ name: 'lot_id', type: ColumnType.TEXT }),
+            new Column({ name: 'movement_type', type: ColumnType.TEXT }),
+            new Column({ name: 'bin_id', type: ColumnType.TEXT }),
+            new Column({ name: 'destination_name', type: ColumnType.TEXT }),
+            new Column({ name: 'bushels_net', type: ColumnType.REAL }),
+            new Column({ name: 'moisture', type: ColumnType.REAL }),
+            new Column({ name: 'test_weight', type: ColumnType.REAL }),
+            new Column({ name: 'occurred_at', type: ColumnType.TEXT }),
+            new Column({ name: 'note', type: ColumnType.TEXT }),
+            new Column({ name: 'source_grain_log_id', type: ColumnType.TEXT }),
+            new Column({ name: 'created_at', type: ColumnType.TEXT }),
+            new Column({ name: 'updated_at', type: ColumnType.TEXT }),
+        ],
+    }),
+    new Table({
+        name: 'inventory_adjustments',
+        columns: [
+            new Column({ name: 'id', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
+            new Column({ name: 'product_name', type: ColumnType.TEXT }),
+            new Column({ name: 'amount', type: ColumnType.REAL }),
+            new Column({ name: 'reason', type: ColumnType.TEXT }),
+            new Column({ name: 'reference_id', type: ColumnType.TEXT }),
+            new Column({ name: 'created_at', type: ColumnType.TEXT }),
+            new Column({ name: 'updated_at', type: ColumnType.TEXT }),
+        ],
+    }),
 ]);
 
 const isWeb = Platform.OS === 'web';
@@ -402,8 +497,10 @@ class ExpoPowerSyncDatabase extends AbstractPowerSyncDatabase {
             await this.execute('CREATE INDEX IF NOT EXISTS idx_invites_token ON invites(token)');
             await this.execute('CREATE INDEX IF NOT EXISTS idx_farm_members_user ON farm_members(user_id)');
             await this.execute('CREATE INDEX IF NOT EXISTS idx_grain_logs_bin_time ON grain_logs(bin_id, start_time)');
-            await this.execute('CREATE INDEX IF NOT EXISTS idx_planting_logs_field_time ON planting_logs(field_id, start_time)');
+            await this.execute('CREATE INDEX IF NOT EXISTS idx_planting_logs_field_time ON planting_logs(field_id, planted_at)');
             await this.execute('CREATE INDEX IF NOT EXISTS idx_attachments_owner ON attachments(owner_record_id)');
+            await this.execute('CREATE INDEX IF NOT EXISTS idx_rent_agreements_landlord ON rent_agreements(landlord_id, crop_year)');
+            await this.execute('CREATE INDEX IF NOT EXISTS idx_agreement_fields_field ON agreement_fields(field_id)');
             console.log('[PowerSync] Indices initialized.');
         } catch (e) {
             console.warn('[PowerSync] Index initialization skipped or failed (might be first run):', e);

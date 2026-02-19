@@ -35,6 +35,138 @@ export const recordAudit = async (audit: AuditRecord) => {
  * Ensures an operation is idempotent by checking if the record already exists.
  * Useful for retries in unstable network conditions.
  */
+/**
+ * Formats data for insertion by auto-attaching farm_id and user_id.
+ */
+export const insertFarmRow = async (
+    dbInstance: any,
+    table: string,
+    data: any,
+    farmId: string,
+    userId?: string
+) => {
+    if (!farmId) throw new Error('[DatabaseUtility] farmId is required for insertion');
+
+    const id = data.id || uuidv4();
+    const record: any = {
+        ...data,
+        id,
+        farm_id: farmId,
+        created_at: data.created_at || new Date().toISOString()
+    };
+
+    if (userId && !record.user_id && table !== 'farms') {
+        record.user_id = userId;
+    }
+
+    const columns = Object.keys(record);
+    const placeholders = columns.map(() => '?').join(', ');
+    const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`;
+
+    await dbInstance.execute(sql, columns.map((col: string) => record[col]));
+
+    // Auto-audit if it's not an audit log itself
+    if (table !== 'audit_logs') {
+        await recordAudit({
+            action: 'INSERT',
+            tableName: table,
+            recordId: id,
+            farmId: farmId,
+            changedBy: userId,
+            changes: data
+        });
+    }
+
+    return id;
+};
+
+/**
+ * Updates a row in a farm-scoped table.
+ * Enforces farm_id scoping.
+ */
+export const updateFarmRow = async (
+    dbInstance: any,
+    table: string,
+    id: string,
+    data: any,
+    farmId: string,
+    userId?: string
+) => {
+    if (!farmId) throw new Error('[DatabaseUtility] farmId is required for update');
+
+    const columns = Object.keys(data);
+    const setClause = columns.map(col => `${col} = ?`).join(', ');
+    const params = [...columns.map(col => data[col]), id, farmId];
+
+    await dbInstance.execute(
+        `UPDATE ${table} SET ${setClause} WHERE id = ? AND farm_id = ?`,
+        params
+    );
+
+    // Auto-audit
+    await recordAudit({
+        action: 'UPDATE',
+        tableName: table,
+        recordId: id,
+        farmId: farmId,
+        changedBy: userId,
+        changes: data
+    });
+};
+
+/**
+ * Deletes a row from a farm-scoped table.
+ * Enforces farm_id scoping.
+ */
+export const deleteFarmRow = async (
+    dbInstance: any,
+    table: string,
+    id: string,
+    farmId: string,
+    userId?: string
+) => {
+    if (!farmId) throw new Error('[DatabaseUtility] farmId is required for deletion');
+
+    await dbInstance.execute(
+        `DELETE FROM ${table} WHERE id = ? AND farm_id = ?`,
+        [id, farmId]
+    );
+
+    // Auto-audit
+    await recordAudit({
+        action: 'DELETE',
+        tableName: table,
+        recordId: id,
+        farmId: farmId,
+        changedBy: userId,
+        changes: { id }
+    });
+};
+
+/**
+ * Wraps db.watch to ensure farm_id is present in the query and params.
+ */
+export const watchFarmQuery = (
+    dbInstance: any,
+    sql: string,
+    params: any[],
+    farmId: string,
+    options: any
+) => {
+    if (!farmId) throw new Error('[DatabaseUtility] farmId is required for watching results');
+
+    const lowerSql = sql.toLowerCase();
+    if (!lowerSql.includes('farm_id')) {
+        throw new Error(`[DatabaseUtility] watchFarmQuery SQL must include farm_id filter: ${sql}`);
+    }
+
+    if (!params.includes(farmId)) {
+        throw new Error(`[DatabaseUtility] watchFarmQuery params must include active farm_id.`);
+    }
+
+    return dbInstance.watch(sql, params, options);
+};
+
 export const executeIdempotent = async (
     checkQuery: string,
     params: any[],

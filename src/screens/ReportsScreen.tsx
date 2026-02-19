@@ -8,9 +8,11 @@ import { useSpray } from '../hooks/useSpray';
 import { useGrain } from '../hooks/useGrain';
 import { usePlanting } from '../hooks/usePlanting';
 import { useSettings } from '../hooks/useSettings';
+import { LandlordSummaryModal } from '../components/LandlordSummaryModal';
 
 export const ReportsScreen = () => {
     const [generating, setGenerating] = useState(false);
+    const [landlordSummaryVisible, setLandlordSummaryVisible] = useState(false);
     const { sprayLogs } = useSpray();
     const { grainLogs } = useGrain();
     const { plantingLogs } = usePlanting();
@@ -137,6 +139,20 @@ export const ReportsScreen = () => {
                 <ReportCard title="Planting Logs (Seed)" type="PLANTING" />
                 <ReportCard title="Grain Logs (Harvest)" type="GRAIN" />
 
+                <Text style={[styles.sectionTitle, { marginTop: Theme.spacing.xl }]}>Landlord Reporting</Text>
+                <View style={styles.card}>
+                    <View>
+                        <Text style={styles.cardTitle}>Landlord Summary (New)</Text>
+                        <Text style={styles.cardSubtitle}>Overview of Cash vs Share rent by field.</Text>
+                    </View>
+                    <TouchableOpacity
+                        style={[styles.button, styles.pdfButton]}
+                        onPress={() => setLandlordSummaryVisible(true)}
+                    >
+                        <Text style={styles.buttonText}>View Summary</Text>
+                    </TouchableOpacity>
+                </View>
+
                 {generating && (
                     <View style={styles.loadingOverlay}>
                         <ActivityIndicator size="large" color={Theme.colors.primary} />
@@ -144,6 +160,12 @@ export const ReportsScreen = () => {
                     </View>
                 )}
             </ScrollView>
+
+            <LandlordSummaryModal
+                visible={landlordSummaryVisible}
+                onClose={() => setLandlordSummaryVisible(false)}
+                cropYear={new Date().getFullYear()}
+            />
         </View>
     );
 };

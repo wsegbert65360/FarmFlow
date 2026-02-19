@@ -2,6 +2,7 @@ import React, { ReactNode } from 'react';
 import { View, StyleSheet, useWindowDimensions, TouchableOpacity, Text, Image } from 'react-native';
 import { Theme } from '../constants/Theme';
 import { StatusOverlay } from './StatusOverlay';
+import { useFarms } from '../hooks/useFarms';
 
 interface ResponsiveLayoutProps {
     children: ReactNode;
@@ -16,6 +17,8 @@ interface ResponsiveLayoutProps {
 export const ResponsiveLayout = ({ children, activeTab, setActiveTab, onSyncPress, farmName, isConnected, isSyncing = false }: ResponsiveLayoutProps) => {
     const { width } = useWindowDimensions();
     const isDesktop = width > 768;
+    const { farms, switchFarm } = useFarms();
+    const [showFarmPicker, setShowFarmPicker] = React.useState(false);
 
     if (!isDesktop) {
         return <View style={styles.mobileContainer}>{children}</View>;
@@ -26,13 +29,43 @@ export const ResponsiveLayout = ({ children, activeTab, setActiveTab, onSyncPres
             <View style={styles.sidebar}>
                 <View style={styles.sidebarHeader}>
                     <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <TouchableOpacity
+                            style={{ flexDirection: 'row', alignItems: 'center' }}
+                            onPress={() => setShowFarmPicker(!showFarmPicker)}
+                        >
                             <Image
                                 source={require('../../assets/icon.png')}
                                 style={styles.logo}
                             />
-                            <Text style={styles.sidebarTitle}>{farmName}</Text>
-                        </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.sidebarTitle} numberOfLines={1}>{farmName}</Text>
+                                {farms.length > 1 && (
+                                    <Text style={{ fontSize: 10, color: Theme.colors.primary, fontWeight: 'bold' }}>
+                                        {showFarmPicker ? '↑ CLOSE' : '↓ SWITCH FARM'}
+                                    </Text>
+                                )}
+                            </View>
+                        </TouchableOpacity>
+
+                        {showFarmPicker && farms.length > 1 && (
+                            <View style={styles.farmPicker}>
+                                {farms.map(f => (
+                                    <TouchableOpacity
+                                        key={f.id}
+                                        style={[styles.farmPickerItem, f.name === farmName && styles.farmPickerItemActive]}
+                                        onPress={() => {
+                                            switchFarm(f.id, f.name);
+                                            setShowFarmPicker(false);
+                                        }}
+                                    >
+                                        <Text style={[styles.farmPickerText, f.name === farmName && styles.farmPickerTextActive]}>
+                                            {f.name}
+                                        </Text>
+                                        <Text style={styles.roleTag}>{f.role}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        )}
                         <StatusOverlay isConnected={isConnected} isSyncing={isSyncing} onRetry={onSyncPress} variant="sidebar" />
                     </View>
                 </View>
@@ -74,7 +107,7 @@ export const ResponsiveLayout = ({ children, activeTab, setActiveTab, onSyncPres
                 </View>
 
                 <View style={styles.sidebarFooter}>
-                    <Text style={styles.versionText}>FarmFlow v4.14-STABLE</Text>
+                    <Text style={styles.versionText}>FarmFlow v4.1.1-PRO</Text>
                 </View>
             </View>
             <View style={styles.mainContent}>
@@ -116,6 +149,43 @@ const styles = StyleSheet.create({
     sidebarTitle: {
         ...Theme.typography.h2,
         color: Theme.colors.primary,
+    },
+    farmPicker: {
+        marginTop: Theme.spacing.md,
+        backgroundColor: Theme.colors.background,
+        borderRadius: Theme.borderRadius.md,
+        borderWidth: 1,
+        borderColor: Theme.colors.border,
+        overflow: 'hidden',
+    },
+    farmPickerItem: {
+        padding: Theme.spacing.md,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        borderBottomWidth: 1,
+        borderBottomColor: Theme.colors.border,
+    },
+    farmPickerItemActive: {
+        backgroundColor: 'rgba(46, 125, 50, 0.05)',
+    },
+    farmPickerText: {
+        ...Theme.typography.body,
+        fontWeight: '500',
+        color: Theme.colors.textSecondary,
+    },
+    farmPickerTextActive: {
+        color: Theme.colors.primary,
+        fontWeight: 'bold',
+    },
+    roleTag: {
+        fontSize: 10,
+        backgroundColor: Theme.colors.border,
+        color: Theme.colors.textSecondary,
+        paddingVertical: 2,
+        paddingHorizontal: 6,
+        borderRadius: 4,
+        overflow: 'hidden',
     },
     navGroup: {
         flex: 1,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, SafeAreaView, Modal } from 'react-native';
 import { showAlert } from '../utils/AlertUtility';
 import { Theme } from '../constants/Theme';
@@ -7,18 +7,26 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { connector } from '../db/SupabaseConnector';
 import { db } from '../db/powersync';
 import { v4 as uuidv4 } from 'uuid';
+import { useFarms } from '../hooks/useFarms';
 
 export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => {
     const { saveSettings } = useSettings();
+    const { farms, acceptInvite, switchFarm } = useFarms();
     const [farmName, setFarmName] = useState('');
     const [state, setState] = useState('');
     const [units, setUnits] = useState<'US' | 'Metric'>('US');
-    const [mode, setMode] = useState<'NEW' | 'JOIN'>('NEW');
+    const [mode, setMode] = useState<'NEW' | 'JOIN' | 'SWITCH'>('NEW');
     const [showScanner, setShowScanner] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
     const [manualId, setManualId] = useState('');
     const [joiningManual, setJoiningManual] = useState(false);
     const [permission, requestPermission] = useCameraPermissions();
+
+    useEffect(() => {
+        if (farms.length > 0 && mode === 'NEW') {
+            setMode('SWITCH');
+        }
+    }, [farms]);
 
     const handleFinish = async () => {
         if (mode === 'NEW') {
@@ -35,7 +43,7 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
                     .insert({
                         id: farmId,
                         name: farmName,
-                        owner_id: user.id,
+                        owner_id: user.id.toString(),
                         created_at: new Date().toISOString()
                     });
 
@@ -46,7 +54,7 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
                     .from('farm_members')
                     .insert({
                         id: uuidv4(),
-                        user_id: user.id,
+                        user_id: user.id.toString(),
                         farm_id: farmId,
                         role: 'OWNER',
                         created_at: new Date().toISOString()
@@ -62,6 +70,7 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
                     onboarding_completed: true,
                     farm_id: farmId,
                 });
+
                 // 4. Trigger full sync
                 const { SyncUtility } = require('../utils/SyncUtility');
                 SyncUtility.performFullSync(user.id).catch(console.error);
@@ -90,49 +99,20 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
             const user = await connector.getUser();
             if (!user) throw new Error('User not authenticated');
 
-            // 1. Validate token and get farm info
-            const { data: invite, error: inviteError } = await connector.client
-                .from('invites')
-                .select('farm_id, role, farms(name)')
-                .eq('token', token)
-                .single();
+            // Use the secure RPC hook from useFarms
+            const result = await acceptInvite(token);
 
-            if (inviteError || !invite) {
+            if (!result) {
                 throw new Error('Invalid or expired invitation token.');
             }
 
-            const farmId = invite.farm_id;
-            const farmName = (invite as any).farms?.name || 'Joined Farm';
-
-            // 2. Join the farm (create membership)
-            const { error: joinError } = await connector.client
-                .from('farm_members')
-                .insert({
-                    id: uuidv4(),
-                    user_id: user.id,
-                    farm_id: farmId,
-                    role: invite.role,
-                    created_at: new Date().toISOString()
-                });
-
-            if (joinError) throw joinError;
-
-            // 3. Update settings locally
-            await saveSettings({
-                farm_id: farmId,
-                farm_name: farmName,
-                onboarding_completed: true
-            });
-
             setShowScanner(false);
             onComplete();
-            showAlert('Success', `Joined ${farmName} successfully!`);
+            showAlert('Success', `Joined ${result.farm_name} successfully!`);
 
-            // 4. Trigger full sync
+            // Trigger full sync
             const { SyncUtility } = require('../utils/SyncUtility');
-            if (user) {
-                SyncUtility.performFullSync(user.id).catch(console.error);
-            }
+            SyncUtility.performFullSync(user.id).catch(console.error);
         } catch (error: any) {
             console.error('Join failed:', error);
             const msg = error.message || 'Unknown network error';
@@ -149,21 +129,52 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
                 <Text style={styles.subtitle}>The simple, secure Anti-ERP for modern farms.</Text>
 
                 <View style={styles.modeToggle}>
+                    {farms.length > 0 && (
+                        <TouchableOpacity
+                            style={[styles.modeButton, mode === 'SWITCH' && styles.modeActive]}
+                            onPress={() => setMode('SWITCH')}
+                        >
+                            <Text style={[styles.modeText, mode === 'SWITCH' && styles.textWhite]}>Switch Farm</Text>
+                        </TouchableOpacity>
+                    )}
                     <TouchableOpacity
                         style={[styles.modeButton, mode === 'NEW' && styles.modeActive]}
                         onPress={() => setMode('NEW')}
                     >
-                        <Text style={[styles.modeText, mode === 'NEW' && styles.textWhite]}>Start New Farm</Text>
+                        <Text style={[styles.modeText, mode === 'NEW' && styles.textWhite]}>Start New</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.modeButton, mode === 'JOIN' && styles.modeActive]}
                         onPress={() => setMode('JOIN')}
                     >
-                        <Text style={[styles.modeText, mode === 'JOIN' && styles.textWhite]}>Join Existing</Text>
+                        <Text style={[styles.modeText, mode === 'JOIN' && styles.textWhite]}>Scan Invite</Text>
                     </TouchableOpacity>
                 </View>
 
-                {mode === 'NEW' ? (
+                {mode === 'SWITCH' && (
+                    <View style={styles.farmList}>
+                        <Text style={styles.joinTitle}>Select Active Farm</Text>
+                        <Text style={styles.joinHint}>Choose which farm environment you want to work in today.</Text>
+                        {farms.map(f => (
+                            <TouchableOpacity
+                                key={f.id}
+                                style={styles.farmCard}
+                                onPress={async () => {
+                                    await switchFarm(f.id, f.name);
+                                    onComplete();
+                                }}
+                            >
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.farmCardName}>{f.name}</Text>
+                                    <Text style={styles.farmCardRole}>{f.role}</Text>
+                                </View>
+                                <Text style={styles.chevron}>›</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
+
+                {mode === 'NEW' && (
                     <>
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Farm Name</Text>
@@ -211,7 +222,9 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
                             <Text style={styles.finishButtonText}>Start Farming</Text>
                         </TouchableOpacity>
                     </>
-                ) : (
+                )}
+
+                {mode === 'JOIN' && (
                     <View style={styles.joinContainer}>
                         <Text style={styles.joinTitle}>Connect to your Farm</Text>
                         <Text style={styles.joinHint}>Ask a farm administrator to show you their Sync QR from the Vault on their device or PC.</Text>
@@ -266,7 +279,6 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
                         onBarcodeScanned={(res) => handleScanJoin(res.data)}
                     />
 
-                    {/* Scanning Frame Overlay */}
                     <View style={styles.overlay}>
                         <View style={styles.unfocusedContainer}></View>
                         <View style={styles.focusedContainer}>
@@ -309,7 +321,7 @@ const styles = StyleSheet.create({
     modeButton: { flex: 1, padding: Theme.spacing.md, alignItems: 'center', borderRadius: Theme.borderRadius.sm },
     modeActive: { backgroundColor: Theme.colors.primary },
     modeText: { fontWeight: 'bold', color: Theme.colors.textSecondary },
-    joinContainer: { alignItems: 'center', marginTop: Theme.spacing.xl, padding: Theme.spacing.xl, backgroundColor: Theme.colors.surface, borderRadius: Theme.borderRadius.lg, borderStyle: 'dashed', borderWidth: 2, borderColor: Theme.colors.border },
+    joinContainer: { alignItems: 'center', marginTop: Theme.spacing.lg, padding: Theme.spacing.xl, backgroundColor: Theme.colors.surface, borderRadius: Theme.borderRadius.lg, borderStyle: 'dashed', borderWidth: 2, borderColor: Theme.colors.border },
     joinTitle: { ...Theme.typography.h2, marginBottom: Theme.spacing.md },
     joinHint: { textAlign: 'center', ...Theme.typography.body, color: Theme.colors.textSecondary, marginBottom: Theme.spacing.xl },
     scanButton: { backgroundColor: Theme.colors.primary, paddingHorizontal: Theme.spacing.xl, paddingVertical: Theme.spacing.lg, borderRadius: Theme.borderRadius.md, width: '100%', alignItems: 'center' },
@@ -320,6 +332,21 @@ const styles = StyleSheet.create({
     manualGroup: { width: '100%' },
     manualButton: { backgroundColor: Theme.colors.secondary, padding: Theme.spacing.md, borderRadius: Theme.borderRadius.sm, alignItems: 'center', marginTop: Theme.spacing.md },
     manualButtonText: { color: 'white', fontWeight: 'bold' },
+    farmList: { marginTop: Theme.spacing.lg },
+    farmCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: Theme.spacing.lg,
+        backgroundColor: Theme.colors.surface,
+        borderRadius: Theme.borderRadius.md,
+        marginBottom: Theme.spacing.md,
+        borderWidth: 1,
+        borderColor: Theme.colors.border,
+        ...Theme.shadows.sm,
+    },
+    farmCardName: { ...Theme.typography.body, fontWeight: 'bold', color: Theme.colors.text },
+    farmCardRole: { ...Theme.typography.caption, color: Theme.colors.primary, fontWeight: 'bold' },
+    chevron: { fontSize: 24, color: Theme.colors.border, marginLeft: Theme.spacing.md },
     closeScanner: { position: 'absolute', bottom: 40, alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 40, paddingVertical: 15, borderRadius: 30, borderWidth: 1, borderColor: 'white' },
     closeScannerText: { color: 'white', fontWeight: 'bold' },
     overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },

@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../db/powersync';
 import { v4 as uuidv4 } from 'uuid';
-import { useSettings } from './useSettings';
-import { recordAudit } from '../utils/DatabaseUtility';
+import { useDatabase } from './useDatabase';
 
 export interface Attachment {
     id: string;
@@ -20,10 +19,10 @@ export interface Attachment {
 export const useAttachments = (ownerRecordId?: string) => {
     const [attachments, setAttachments] = useState<Attachment[]>([]);
     const [loading, setLoading] = useState(true);
-    const { settings } = useSettings();
-    const farmId = settings?.farm_id || 'default_farm';
+    const { farmId, watchFarmQuery, insertFarmRow, deleteFarmRow } = useDatabase();
 
     useEffect(() => {
+        if (!farmId) return;
         const abortController = new AbortController();
 
         let query = 'SELECT * FROM attachments WHERE farm_id = ?';
@@ -34,55 +33,50 @@ export const useAttachments = (ownerRecordId?: string) => {
             params.push(ownerRecordId);
         }
 
-        db.watch(
+        watchFarmQuery(
             query,
             params,
             {
-                onResult: (result) => {
+                onResult: (result: any) => {
                     setAttachments(result.rows?._array || []);
                     setLoading(false);
                 },
-                onError: (error) => {
+                onError: (error: any) => {
                     console.error('Failed to watch attachments', error);
                     setLoading(false);
                 }
-            },
-            { signal: abortController.signal }
+            }
         );
 
         return () => abortController.abort();
     }, [ownerRecordId, farmId]);
 
     const addAttachment = async (attachment: Partial<Attachment>) => {
-        const id = uuidv4();
-        await db.execute(
-            'INSERT INTO attachments (id, filename, type, size, hash, owner_record_id, local_path, remote_url, status, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [
-                id,
-                attachment.filename || '',
-                attachment.type || '',
-                attachment.size || 0,
-                attachment.hash || '',
-                attachment.owner_record_id || '',
-                attachment.local_path || '',
-                attachment.remote_url || '',
-                attachment.status || 'pending',
-                farmId,
-                new Date().toISOString()
-            ]
-        );
-        return id;
+        try {
+            const id = await insertFarmRow('attachments', {
+                filename: attachment.filename || '',
+                type: attachment.type || '',
+                size: attachment.size || 0,
+                hash: attachment.hash || '',
+                owner_record_id: attachment.owner_record_id || '',
+                local_path: attachment.local_path || '',
+                remote_url: attachment.remote_url || '',
+                status: attachment.status || 'pending'
+            });
+            return id;
+        } catch (error) {
+            console.error('[useAttachments] Failed to add attachment', error);
+            throw error;
+        }
     };
 
     const deleteAttachment = async (id: string) => {
-        await db.execute('DELETE FROM attachments WHERE id = ? AND farm_id = ?', [id, farmId]);
-        await recordAudit({
-            action: 'DELETE',
-            tableName: 'attachments',
-            recordId: id,
-            farmId: farmId,
-            changes: { id }
-        });
+        try {
+            await deleteFarmRow('attachments', id);
+        } catch (error) {
+            console.error('[useAttachments] Failed to delete attachment', error);
+            throw error;
+        }
     };
 
     return { attachments, loading, addAttachment, deleteAttachment };

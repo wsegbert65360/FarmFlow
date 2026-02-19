@@ -27,6 +27,7 @@ export default function App() {
   const [activeLog, setActiveLog] = useState<{
     type: LogType;
     source: { id: string, name: string, acreage?: number, type: 'FIELD' | 'BIN' };
+    replacesLogId?: string;
   } | null>(null);
 
   const [session, setSession] = useState<Session | null>(null);
@@ -139,6 +140,7 @@ export default function App() {
         fixedName={activeLog.source.name}
         fixedAcreage={activeLog.source.acreage}
         fixedType={activeLog.source.type}
+        replacesLogId={activeLog.replacesLogId}
         onClose={() => setActiveLog(null)}
       />
     );
@@ -189,9 +191,10 @@ export default function App() {
         <View style={styles.content}>
           {activeTab === 'FIELDS' ? (
             <FieldListScreen
-              onSelectAction={(field, type) => setActiveLog({
+              onSelectAction={(field, type, replacesLogId) => setActiveLog({
                 type,
-                source: { id: field.id, name: field.name, acreage: field.acreage, type: 'FIELD' }
+                source: { id: field.id, name: field.name, acreage: field.acreage, type: 'FIELD' },
+                replacesLogId
               })}
             />
           ) : activeTab === 'GRAIN' ? (

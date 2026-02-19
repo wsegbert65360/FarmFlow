@@ -1,8 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '../db/powersync';
+import { useDatabase } from './useDatabase';
 import { v4 as uuidv4 } from 'uuid';
-import { recordAudit } from '../utils/DatabaseUtility';
-import { useSettings } from './useSettings';
 
 export interface RecipeItem {
     id: string;
@@ -30,8 +29,11 @@ export interface SprayLog {
     id: string;
     field_id: string;
     recipe_id: string;
-    start_time: string;
-    end_time: string | null;
+    sprayed_at: string;
+    weather_source: 'AUTO' | 'MANUAL';
+    voided_at: string | null;
+    void_reason: string | null;
+    replaces_log_id: string | null;
     total_gallons: number | null;
     total_product: number | null;
     weather_temp: number | null;
@@ -45,21 +47,21 @@ export interface SprayLog {
     acres_treated: number | null;
     phi_days: number | null;
     rei_hours: number | null;
+    notes: string | null;
 }
 
 export const useSpray = () => {
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [sprayLogs, setSprayLogs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const { settings, loading: settingsLoading } = useSettings();
-    const farmId = settings?.farm_id;
+    const { farmId, watchFarmQuery, insertFarmRow, updateFarmRow, deleteFarmRow } = useDatabase();
 
     useEffect(() => {
-        if (!farmId || settingsLoading) return;
+        if (!farmId) return;
         const abortController = new AbortController();
 
         // Watch recipes with items joined
-        db.watch(
+        watchFarmQuery(
             `SELECT r.*, 
                     ri.id as item_id, ri.product_name as item_product_name, 
                     ri.epa_number as item_epa_number, ri.rate as item_rate, ri.unit as item_unit
@@ -68,7 +70,7 @@ export const useSpray = () => {
              WHERE r.farm_id = ?`,
             [farmId],
             {
-                onResult: (result) => {
+                onResult: (result: any) => {
                     const rows = result.rows?._array || [];
                     const recipeMap: Record<string, Recipe> = {};
 
@@ -98,34 +100,81 @@ export const useSpray = () => {
 
                     setRecipes(Object.values(recipeMap));
                 },
-                onError: (e) => console.error('Failed to watch recipes', e)
-            },
-            { signal: abortController.signal }
+                onError: (e: any) => console.error('Failed to watch recipes', e)
+            }
         );
 
-        // Watch spray_logs with joins for reporting
-        db.watch(
-            `SELECT sl.*, 
-                    r.name as recipe_name, r.product_name, r.epa_number, r.rate_per_acre, r.water_rate_per_acre,
-                    f.name as field_name, f.acreage as field_acreage
-             FROM spray_logs sl
-             LEFT JOIN recipes r ON sl.recipe_id = r.id
-             LEFT JOIN fields f ON sl.field_id = f.id
+        // Watch spray logs with items joined (Phase 1 Reporting source)
+        watchFarmQuery(
+            `SELECT sl.*, sli.id as item_id, sli.product_name as item_product_name, 
+                    sli.epa_number as item_epa_number, sli.rate as item_rate, sli.rate_unit as item_unit,
+                    sli.total_amount as item_total_amount, sli.total_unit as item_total_unit
+             FROM spray_logs sl 
+             LEFT JOIN spray_log_items sli ON sl.id = sli.spray_log_id
              WHERE sl.farm_id = ?
-             ORDER BY sl.start_time DESC`,
+             ORDER BY sl.sprayed_at DESC`,
             [farmId],
             {
-                onResult: (result) => {
-                    setSprayLogs(result.rows?._array || []);
-                    setLoading(false);
+                onResult: (result: any) => {
+                    const rows = result.rows?._array || [];
+                    const logMap: Record<string, any> = {};
+
+                    rows.forEach((row: any) => {
+                        if (!logMap[row.id]) {
+                            logMap[row.id] = { ...row, items: [] };
+                        }
+                        if (row.item_id) {
+                            logMap[row.id].items.push({
+                                id: row.item_id,
+                                spray_log_id: row.id,
+                                product_name: row.item_product_name,
+                                epa_number: row.item_epa_number,
+                                rate: row.item_rate,
+                                unit: row.item_unit,
+                                total_amount: row.item_total_amount,
+                                total_unit: row.item_total_unit
+                            });
+                        }
+                    });
+                    setSprayLogs(Object.values(logMap));
                 },
-                onError: (e) => console.error('Failed to watch spray_logs', e)
-            },
-            { signal: abortController.signal }
+                onError: (e: any) => console.error('Failed to watch spray logs', e)
+            }
         );
 
         return () => abortController.abort();
     }, [farmId]);
+
+    const voidSprayLog = async (logId: string, reason: string) => {
+        try {
+            const now = new Date().toISOString();
+
+            // 1. Mark as voided
+            await updateFarmRow('spray_logs', logId, {
+                voided_at: now,
+                void_reason: reason
+            });
+
+            // 2. Add BACK to inventory from snapshot items
+            const snapshotItems = await db.getAll('SELECT * FROM spray_log_items WHERE spray_log_id = ?', [logId]) as any[];
+            if (snapshotItems && snapshotItems.length > 0) {
+                for (const item of snapshotItems) {
+                    await insertFarmRow('inventory_adjustments', {
+                        id: uuidv4(),
+                        product_name: item.product_name,
+                        amount: item.total_amount, // Positive = addition back to hand
+                        reason: 'LOG_VOIDED',
+                        reference_id: logId
+                    });
+                }
+            }
+
+            console.log(`[Void] Log ${logId} voided and inventory restored.`);
+        } catch (error) {
+            console.error('Failed to void spray log', error);
+            throw error;
+        }
+    };
 
     const addSprayLog = async (params: {
         fieldId: string;
@@ -138,6 +187,7 @@ export const useSpray = () => {
             windDir: string;
             humidity: number;
         } | null;
+        weatherSource?: 'AUTO' | 'MANUAL';
         targetCrop?: string;
         targetPest?: string;
         applicatorName?: string;
@@ -146,9 +196,11 @@ export const useSpray = () => {
         phi_days?: number;
         rei_hours?: number;
         notes?: string;
+        sprayedAt?: string;
+        replacesLogId?: string;
+        voidReason?: string;
         id?: string;
     }) => {
-        if (!farmId) throw new Error('No farm selected');
         try {
             const id = params.id || uuidv4();
             const {
@@ -159,93 +211,91 @@ export const useSpray = () => {
                 acresTreated,
                 phi_days,
                 rei_hours,
+                replacesLogId,
+                voidReason
             } = params;
 
-            const now = new Date();
-            const startTime = now.toISOString();
+            // 0. If replacing an old log, void it first
+            if (replacesLogId) {
+                await voidSprayLog(replacesLogId, voidReason || 'Replaced by correction');
+            }
 
-            // Duration calculation: (acres * 83 seconds) + 10 minutes (600 seconds)
-            const durationSeconds = (acresTreated || 0) * 83 + 600;
-            const endTime = new Date(now.getTime() + durationSeconds * 1000).toISOString();
+            const sprayedAt = params.sprayedAt || new Date().toISOString();
 
-            // 1. Insert the log
-            await db.execute(
-                `INSERT INTO spray_logs (
-                    id, field_id, recipe_id, start_time, end_time, 
-                    total_gallons, total_product, 
-                    weather_temp, weather_wind_speed, weather_wind_dir, weather_humidity,
-                    target_crop, target_pest, applicator_name, applicator_cert, acres_treated,
-                    phi_days, rei_hours,
-                    notes,
-                    farm_id,
-                    created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    id, params.fieldId, params.recipeId, startTime, endTime,
-                    params.totalGallons, params.totalProduct,
-                    params.weather?.temp ?? null,
-                    params.weather?.windSpeed ?? null,
-                    params.weather?.windDir ?? null,
-                    params.weather?.humidity ?? null,
-                    targetCrop || null,
-                    targetPest || null,
-                    applicatorName || null,
-                    applicatorCert || null,
-                    acresTreated || null,
-                    phi_days || null,
-                    rei_hours || null,
-                    params.notes || null,
-                    farmId,
-                    now.toISOString()
-                ]
-            );
+            // 1. Insert the log using the audit-ready model
+            await insertFarmRow('spray_logs', {
+                id,
+                field_id: params.fieldId,
+                recipe_id: params.recipeId,
+                sprayed_at: sprayedAt,
+                weather_source: params.weatherSource || 'AUTO',
+                replaces_log_id: replacesLogId || null,
+                total_gallons: params.totalGallons,
+                total_product: params.totalProduct,
+                weather_temp: params.weather?.temp ?? null,
+                weather_wind_speed: params.weather?.windSpeed ?? null,
+                weather_wind_dir: params.weather?.windDir ?? null,
+                weather_humidity: params.weather?.humidity ?? null,
+                target_crop: targetCrop || null,
+                target_pest: targetPest || null,
+                applicator_name: applicatorName || null,
+                applicator_cert: applicatorCert || null,
+                acres_treated: acresTreated || null,
+                phi_days: phi_days || null,
+                rei_hours: rei_hours || null,
+                notes: params.notes || null,
+            });
 
-            // 2. Passive Inventory Update for MULTIPLE products
+            // 2. Snapshot recipe items and update inventory
             const selectedRecipe = recipes.find(r => r.id === params.recipeId);
             if (selectedRecipe?.items && selectedRecipe.items.length > 0) {
                 for (const item of selectedRecipe.items) {
                     const productName = item.product_name;
-                    // We need to handle unit conversion here eventually. 
-                    // For now, assuming inventory and rate use same unit or simple subtraction.
-                    // rate is usually per acre. totalProduct = rate * acreage.
                     const itemUsage = item.rate * (acresTreated || 0);
 
-                    const invResult = await db.execute('SELECT id, quantity_on_hand FROM inventory WHERE product_name = ? AND farm_id = ?', [productName, farmId]);
-                    const existing = invResult.rows?._array[0];
+                    // A. Snapshot Item
+                    await insertFarmRow('spray_log_items', {
+                        spray_log_id: id,
+                        product_name: productName,
+                        epa_number: item.epa_number,
+                        rate: item.rate,
+                        rate_unit: item.unit,
+                        total_amount: itemUsage,
+                        total_unit: item.unit
+                    });
 
-                    if (existing) {
-                        const newQty = (existing.quantity_on_hand || 0) - itemUsage;
-                        await db.execute(
-                            'UPDATE inventory SET quantity_on_hand = ? WHERE id = ?',
-                            [newQty, existing.id]
-                        );
-                    } else {
-                        const newId = uuidv4();
-                        const newQty = -itemUsage;
-                        await db.execute(
-                            'INSERT INTO inventory (id, product_name, quantity_on_hand, unit, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-                            [newId, productName, newQty, item.unit, farmId, new Date().toISOString()]
-                        );
-                    }
+                    // B. Audit Adjustment (Deduction)
+                    await insertFarmRow('inventory_adjustments', {
+                        id: uuidv4(),
+                        product_name: productName,
+                        amount: -itemUsage, // Negative = deduction
+                        reason: replacesLogId ? 'LOG_CORRECTION' : 'LOG_CREATED',
+                        reference_id: id
+                    });
                 }
             } else if (selectedRecipe?.product_name) {
                 // FALLBACK for legacy recipes
                 const productName = selectedRecipe.product_name;
-                const invResult = await db.execute('SELECT id, quantity_on_hand FROM inventory WHERE product_name = ? AND farm_id = ?', [productName, farmId]);
-                const existing = invResult.rows?._array[0];
-                if (existing) {
-                    const newQty = (existing.quantity_on_hand || 0) - params.totalProduct;
-                    await db.execute('UPDATE inventory SET quantity_on_hand = ? WHERE id = ?', [newQty, existing.id]);
-                }
-            }
 
-            await recordAudit({
-                action: 'INSERT',
-                tableName: 'spray_logs',
-                recordId: id,
-                farmId: farmId,
-                changes: params
-            });
+                await insertFarmRow('spray_log_items', {
+                    id: uuidv4(),
+                    spray_log_id: id,
+                    product_name: productName,
+                    epa_number: selectedRecipe.epa_number,
+                    rate: selectedRecipe.rate_per_acre || 0,
+                    rate_unit: 'Gal',
+                    total_amount: params.totalProduct,
+                    total_unit: 'Gal'
+                });
+
+                await insertFarmRow('inventory_adjustments', {
+                    id: uuidv4(),
+                    product_name: productName,
+                    amount: -params.totalProduct, // Negative = deduction
+                    reason: replacesLogId ? 'LOG_CORRECTION' : 'LOG_CREATED',
+                    reference_id: id
+                });
+            }
 
             return id;
         } catch (error) {
@@ -255,63 +305,73 @@ export const useSpray = () => {
     };
 
     const addRecipe = async (recipe: Omit<Recipe, 'id'>) => {
-        if (!farmId) throw new Error('No farm selected');
-        const id = uuidv4();
-        const now = new Date().toISOString();
-
-        await db.execute(
-            'INSERT INTO recipes (id, name, water_rate_per_acre, phi_days, rei_hours, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [id, recipe.name, recipe.water_rate_per_acre, recipe.phi_days, recipe.rei_hours, farmId, now]
-        );
+        const id = await insertFarmRow('recipes', {
+            name: recipe.name,
+            water_rate_per_acre: recipe.water_rate_per_acre,
+            phi_days: recipe.phi_days,
+            rei_hours: recipe.rei_hours
+        });
 
         if (recipe.items && recipe.items.length > 0) {
             for (const item of recipe.items) {
-                const itemId = uuidv4();
-                await db.execute(
-                    'INSERT INTO recipe_items (id, recipe_id, product_name, epa_number, rate, unit, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                    [itemId, id, item.product_name, item.epa_number, item.rate, item.unit, farmId, now]
-                );
+                await insertFarmRow('recipe_items', {
+                    recipe_id: id,
+                    product_name: item.product_name,
+                    epa_number: item.epa_number,
+                    rate: item.rate,
+                    unit: item.unit
+                });
             }
         }
-
-        await recordAudit({ action: 'INSERT', tableName: 'recipes', recordId: id, farmId: farmId, changes: recipe });
     };
 
     const updateRecipe = async (id: string, recipe: Partial<Recipe>) => {
-        if (!farmId) throw new Error('No farm selected');
-        const now = new Date().toISOString();
+        try {
+            await updateFarmRow('recipes', id, {
+                name: recipe.name,
+                water_rate_per_acre: recipe.water_rate_per_acre,
+                phi_days: recipe.phi_days,
+                rei_hours: recipe.rei_hours
+            });
 
-        await db.execute(
-            'UPDATE recipes SET name = ?, water_rate_per_acre = ?, phi_days = ?, rei_hours = ? WHERE id = ? AND farm_id = ?',
-            [recipe.name, recipe.water_rate_per_acre, recipe.phi_days, recipe.rei_hours, id, farmId]
-        );
-
-        if (recipe.items) {
-            // Re-sync items: delete and re-insert for simplicity
-            await db.execute('DELETE FROM recipe_items WHERE recipe_id = ? AND farm_id = ?', [id, farmId]);
-            for (const item of recipe.items) {
-                const itemId = uuidv4();
-                await db.execute(
-                    'INSERT INTO recipe_items (id, recipe_id, product_name, epa_number, rate, unit, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                    [itemId, id, item.product_name, item.epa_number, item.rate, item.unit, farmId, now]
-                );
+            if (recipe.items) {
+                // Re-sync items: delete and re-insert for simplicity
+                // Note: recipe_items table also has farm_id, so we use deleteFarmRow if we wanted to be super safe, 
+                // but usually they are wiped by ID prefix.
+                await db.execute('DELETE FROM recipe_items WHERE recipe_id = ? AND farm_id = ?', [id, farmId]);
+                for (const item of recipe.items) {
+                    await insertFarmRow('recipe_items', {
+                        recipe_id: id,
+                        product_name: item.product_name,
+                        epa_number: item.epa_number,
+                        rate: item.rate,
+                        unit: item.unit
+                    });
+                }
             }
+        } catch (error) {
+            console.error('Failed to update recipe', error);
+            throw error;
         }
-
-        await recordAudit({ action: 'UPDATE', tableName: 'recipes', recordId: id, farmId: farmId, changes: recipe });
     };
 
     const deleteRecipe = async (id: string) => {
-        if (!farmId) throw new Error('No farm selected');
-        await db.execute('DELETE FROM recipes WHERE id = ? AND farm_id = ?', [id, farmId]);
-        await db.execute('DELETE FROM recipe_items WHERE recipe_id = ? AND farm_id = ?', [id, farmId]);
-        await recordAudit({ action: 'DELETE', tableName: 'recipes', recordId: id, farmId: farmId, changes: { id } });
+        try {
+            await deleteFarmRow('recipes', id);
+            await db.execute('DELETE FROM recipe_items WHERE recipe_id = ? AND farm_id = ?', [id, farmId]);
+        } catch (error) {
+            console.error('Failed to delete recipe', error);
+            throw error;
+        }
     };
 
     const deleteSprayLog = async (id: string) => {
-        if (!farmId) throw new Error('No farm selected');
-        await db.execute('DELETE FROM spray_logs WHERE id = ? AND farm_id = ?', [id, farmId]);
-        await recordAudit({ action: 'DELETE', tableName: 'spray_logs', recordId: id, farmId: farmId, changes: { id } });
+        try {
+            await deleteFarmRow('spray_logs', id);
+        } catch (error) {
+            console.error('Failed to delete spray log', error);
+            throw error;
+        }
     };
 
     return {

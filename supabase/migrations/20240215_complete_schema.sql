@@ -274,3 +274,40 @@ CREATE POLICY "Data Access AuditLogs" ON audit_logs FOR ALL USING (check_farm_me
 CREATE POLICY "Data Access Landlords" ON landlords FOR ALL USING (check_farm_membership(farm_id));
 CREATE POLICY "Data Access LandlordShares" ON landlord_shares FOR ALL USING (check_farm_membership(farm_id));
 
+-- 3. Functions & RPCs
+-- Securely accept an invitation token
+CREATE OR REPLACE FUNCTION accept_invite(token_text TEXT)
+RETURNS TABLE (
+    farm_id TEXT,
+    farm_name TEXT,
+    role TEXT
+) AS $$
+DECLARE
+    target_invite RECORD;
+BEGIN
+    -- 1. Find and validate the invite
+    SELECT i.farm_id, i.role, f.name INTO target_invite
+    FROM invites i
+    JOIN farms f ON f.id = i.farm_id
+    WHERE i.token = token_text
+    AND i.expires_at > NOW();
+
+    IF target_invite.farm_id IS NULL THEN
+        RAISE EXCEPTION 'Invalid or expired invitation token';
+    END IF;
+
+    -- 2. Create the membership (if not already a member)
+    INSERT INTO farm_members (id, user_id, farm_id, role, created_at)
+    VALUES (
+        gen_random_uuid()::text,
+        auth.uid()::text,
+        target_invite.farm_id,
+        target_invite.role,
+        NOW()
+    )
+    ON CONFLICT DO NOTHING;
+
+    -- 3. Return the farm info
+    RETURN QUERY SELECT target_invite.farm_id, target_invite.name, target_invite.role;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

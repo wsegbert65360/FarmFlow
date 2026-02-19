@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { useSettings } from './useSettings';
 import { recordAudit } from '../utils/DatabaseUtility';
 import * as Location from 'expo-location';
+import { useDatabase } from './useDatabase';
 
 export interface Field {
     id: string;
@@ -18,8 +19,7 @@ export const useFields = () => {
     const [fields, setFields] = useState<Field[]>([]);
     const [loading, setLoading] = useState(true);
     const [userLoc, setUserLoc] = useState<Location.LocationObject | null>(null);
-    const { settings, loading: settingsLoading } = useSettings();
-    const farmId = settings?.farm_id;
+    const { farmId, insertFarmRow, updateFarmRow, deleteFarmRow, watchFarmQuery } = useDatabase();
 
     useEffect(() => {
         const getLoc = async () => {
@@ -41,42 +41,34 @@ export const useFields = () => {
     }, []);
 
     useEffect(() => {
-        if (!farmId || settingsLoading) return;
+        if (!farmId) return;
         const abortController = new AbortController();
 
-        db.watch(
+        watchFarmQuery(
             'SELECT * FROM fields WHERE farm_id = ?',
             [farmId],
             {
-                onResult: (result) => {
+                onResult: (result: any) => {
                     setFields(result.rows?._array || []);
                     setLoading(false);
                 },
-                onError: (error) => {
+                onError: (error: any) => {
                     console.error('Failed to watch fields', error);
                     setLoading(false);
                 }
-            },
-            { signal: abortController.signal }
+            }
         );
 
         return () => abortController.abort();
     }, [farmId]);
 
     const addField = async (name: string, acreage: number, lat?: number, long?: number) => {
-        if (!farmId) throw new Error('No farm selected');
         try {
-            const id = uuidv4();
-            await db.execute(
-                'INSERT INTO fields (id, name, acreage, last_gps_lat, last_gps_long, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                [id, name, acreage, lat ?? null, long ?? null, farmId, new Date().toISOString()]
-            );
-            await recordAudit({
-                action: 'INSERT',
-                tableName: 'fields',
-                recordId: id,
-                farmId: farmId,
-                changes: { name, acreage, lat, long }
+            const id = await insertFarmRow('fields', {
+                name,
+                acreage,
+                last_gps_lat: lat ?? null,
+                last_gps_long: long ?? null
             });
             return id;
         } catch (error) {
@@ -86,18 +78,12 @@ export const useFields = () => {
     };
 
     const updateField = async (id: string, name: string, acreage: number, lat?: number, long?: number) => {
-        if (!farmId) throw new Error('No farm selected');
         try {
-            await db.execute(
-                'UPDATE fields SET name = ?, acreage = ?, last_gps_lat = ?, last_gps_long = ? WHERE id = ? AND farm_id = ?',
-                [name, acreage, lat ?? null, long ?? null, id, farmId]
-            );
-            await recordAudit({
-                action: 'UPDATE',
-                tableName: 'fields',
-                recordId: id,
-                farmId: farmId,
-                changes: { name, acreage, lat, long }
+            await updateFarmRow('fields', id, {
+                name,
+                acreage,
+                last_gps_lat: lat ?? null,
+                last_gps_long: long ?? null
             });
         } catch (error) {
             console.error('Failed to update field', error);
@@ -106,16 +92,8 @@ export const useFields = () => {
     };
 
     const deleteField = async (id: string) => {
-        if (!farmId) throw new Error('No farm selected');
         try {
-            await db.execute('DELETE FROM fields WHERE id = ? AND farm_id = ?', [id, farmId]);
-            await recordAudit({
-                action: 'DELETE',
-                tableName: 'fields',
-                recordId: id,
-                farmId: farmId,
-                changes: { id }
-            });
+            await deleteFarmRow('fields', id);
         } catch (error) {
             console.error('Failed to delete field', error);
             throw error;
