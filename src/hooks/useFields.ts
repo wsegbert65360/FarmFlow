@@ -18,8 +18,8 @@ export const useFields = () => {
     const [fields, setFields] = useState<Field[]>([]);
     const [loading, setLoading] = useState(true);
     const [userLoc, setUserLoc] = useState<Location.LocationObject | null>(null);
-    const { settings } = useSettings();
-    const farmId = settings?.farm_id || 'default_farm';
+    const { settings, loading: settingsLoading } = useSettings();
+    const farmId = settings?.farm_id;
 
     useEffect(() => {
         const getLoc = async () => {
@@ -41,6 +41,7 @@ export const useFields = () => {
     }, []);
 
     useEffect(() => {
+        if (!farmId || settingsLoading) return;
         const abortController = new AbortController();
 
         db.watch(
@@ -63,6 +64,7 @@ export const useFields = () => {
     }, [farmId]);
 
     const addField = async (name: string, acreage: number, lat?: number, long?: number) => {
+        if (!farmId) throw new Error('No farm selected');
         try {
             const id = uuidv4();
             await db.execute(
@@ -84,6 +86,7 @@ export const useFields = () => {
     };
 
     const updateField = async (id: string, name: string, acreage: number, lat?: number, long?: number) => {
+        if (!farmId) throw new Error('No farm selected');
         try {
             await db.execute(
                 'UPDATE fields SET name = ?, acreage = ?, last_gps_lat = ?, last_gps_long = ? WHERE id = ? AND farm_id = ?',
@@ -103,6 +106,7 @@ export const useFields = () => {
     };
 
     const deleteField = async (id: string) => {
+        if (!farmId) throw new Error('No farm selected');
         try {
             await db.execute('DELETE FROM fields WHERE id = ? AND farm_id = ?', [id, farmId]);
             await recordAudit({

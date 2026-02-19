@@ -299,6 +299,42 @@ export const SyncUtility = {
         }
         console.log(`[SyncUtility] === PUSH COMPLETE: ${totalPushed} rows, ${errors.length} errors ===`);
         return { pushed: totalPushed, errors, debugLog };
+    },
+
+    /**
+     * Centralized Full Sync: Pushes local data, then Pulls/Bootstraps from cloud.
+     * This is the "safe" way to ensure cloud and local are in sync for non-native platforms.
+     */
+    performFullSync: async (userId: string): Promise<{ success: boolean; pushed: number; message: string }> => {
+        console.log('[SyncUtility] Starting Full Sync...');
+        try {
+            // 1. Push any local "offline" changes first
+            const pushResult = await SyncUtility.pushAllLocalData();
+
+            // 2. Refresh/Bootstrap local state from cloud
+            const farmId = await SyncUtility.bootstrapDevice(userId);
+
+            if (!farmId) {
+                return {
+                    success: false,
+                    pushed: pushResult.pushed,
+                    message: 'Authenticated, but no farm data found. Please complete onboarding.'
+                };
+            }
+
+            return {
+                success: true,
+                pushed: pushResult.pushed,
+                message: `Sync successful. Pushed ${pushResult.pushed} rows.`
+            };
+        } catch (err: any) {
+            console.error('[SyncUtility] Full sync failed:', err);
+            return {
+                success: false,
+                pushed: 0,
+                message: err.message || 'Synchronization failed.'
+            };
+        }
     }
 };
 

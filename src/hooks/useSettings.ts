@@ -38,6 +38,8 @@ export const useSettings = () => {
                             farm_id: row.farm_id || '',
                             farm_join_token: row.farm_join_token || '',
                         });
+                    } else {
+                        setSettings(null);
                     }
                     setLoading(false);
                 },

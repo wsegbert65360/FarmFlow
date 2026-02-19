@@ -10,13 +10,16 @@ const getStatusConfig = (isConnected: boolean, isSyncing: boolean) => {
 };
 
 export const StatusOverlay = ({ isConnected, isSyncing = false, variant = 'floating', onRetry }: { isConnected: boolean, isSyncing?: boolean, variant?: 'floating' | 'sidebar', onRetry?: () => void }) => {
+    const [userEmail, setUserEmail] = React.useState('User');
     const { width } = useWindowDimensions();
     const isDesktop = width > 768;
     const { label, color } = getStatusConfig(isConnected, isSyncing);
 
-    // Safe access to user email from Supabase session
-    const session = (connector.client as any).auth?.session?.() || (connector.client.auth as any).session;
-    const userEmail = session?.user?.email || 'User';
+    React.useEffect(() => {
+        connector.getUser().then(user => {
+            if (user?.email) setUserEmail(user.email);
+        });
+    }, []);
 
     const handleExport = async () => {
         const { generateDiagnosticReport } = require('../utils/DiagnosticUtility');

@@ -21,10 +21,11 @@ export const useLandlords = () => {
     const [landlords, setLandlords] = useState<Landlord[]>([]);
     const [fieldSplits, setFieldSplits] = useState<FieldSplit[]>([]);
     const [loading, setLoading] = useState(true);
-    const { settings } = useSettings();
-    const farmId = settings?.farm_id || 'default_farm';
+    const { settings, loading: settingsLoading } = useSettings();
+    const farmId = settings?.farm_id;
 
     useEffect(() => {
+        if (!farmId || settingsLoading) return;
         const abortController = new AbortController();
 
         // Watch Landlords
@@ -59,6 +60,7 @@ export const useLandlords = () => {
     }, [farmId]);
 
     const addLandlord = async (name: string, email: string) => {
+        if (!farmId) throw new Error('No farm selected');
         const id = uuidv4();
         await db.execute(
             'INSERT INTO landlords (id, name, email, farm_id, created_at) VALUES (?, ?, ?, ?, ?)',
@@ -69,6 +71,7 @@ export const useLandlords = () => {
     };
 
     const addFieldSplit = async (fieldId: string, landlordId: string, percentage: number) => {
+        if (!farmId) throw new Error('No farm selected');
         const id = uuidv4();
         await db.execute(
             'INSERT INTO landlord_shares (id, field_id, landlord_id, share_percentage, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -78,11 +81,13 @@ export const useLandlords = () => {
     };
 
     const deleteSplit = async (id: string) => {
+        if (!farmId) throw new Error('No farm selected');
         await db.execute('DELETE FROM landlord_shares WHERE id = ? AND farm_id = ?', [id, farmId]);
         await recordAudit({ action: 'DELETE', tableName: 'landlord_shares', recordId: id, farmId: farmId, changes: { id } });
     };
 
     const deleteLandlord = async (id: string) => {
+        if (!farmId) throw new Error('No farm selected');
         try {
             // 1. Delete associated splits
             await db.execute('DELETE FROM landlord_shares WHERE landlord_id = ? AND farm_id = ?', [id, farmId]);

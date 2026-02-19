@@ -25,7 +25,7 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
             if (!farmName || !state) return;
             try {
                 const farmId = uuidv4();
-                const { data: { user } } = await connector.client.auth.getUser();
+                const user = await connector.getUser();
 
                 if (!user) throw new Error('User not authenticated');
 
@@ -62,6 +62,9 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
                     onboarding_completed: true,
                     farm_id: farmId,
                 });
+                // 4. Trigger full sync
+                const { SyncUtility } = require('../utils/SyncUtility');
+                SyncUtility.performFullSync(user.id).catch(console.error);
 
                 onComplete();
             } catch (error: any) {
@@ -84,7 +87,7 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
                 // Not JSON, assume data is the raw token
             }
 
-            const { data: { user } } = await connector.client.auth.getUser();
+            const user = await connector.getUser();
             if (!user) throw new Error('User not authenticated');
 
             // 1. Validate token and get farm info
@@ -125,10 +128,10 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
             onComplete();
             showAlert('Success', `Joined ${farmName} successfully!`);
 
-            // Trigger fallback sync
+            // 4. Trigger full sync
             const { SyncUtility } = require('../utils/SyncUtility');
-            if (!SyncUtility.isNativeStreamingAvailable()) {
-                SyncUtility.pullAllFarmData(farmId).catch(console.error);
+            if (user) {
+                SyncUtility.performFullSync(user.id).catch(console.error);
             }
         } catch (error: any) {
             console.error('Join failed:', error);

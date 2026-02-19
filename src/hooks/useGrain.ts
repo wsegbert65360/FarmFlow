@@ -33,10 +33,11 @@ export const useGrain = () => {
     const [bins, setBins] = useState<Bin[]>([]);
     const [grainLogs, setGrainLogs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const { settings } = useSettings();
-    const farmId = settings?.farm_id || 'default_farm';
+    const { settings, loading: settingsLoading } = useSettings();
+    const farmId = settings?.farm_id;
 
     useEffect(() => {
+        if (!farmId || settingsLoading) return;
         const abortController = new AbortController();
 
         // Watch bins with level calculation
@@ -78,6 +79,7 @@ export const useGrain = () => {
     }, [farmId]);
 
     const addGrainLog = async (log: Omit<GrainLog, 'id' | 'start_time'>) => {
+        if (!farmId) throw new Error('No farm selected');
         try {
             const id = uuidv4();
             const now = new Date().toISOString();
@@ -102,6 +104,7 @@ export const useGrain = () => {
     };
 
     const addBin = async (name: string, capacity: number, crop_type: string, landlord_id?: string | null, landlord_share_pct?: number | null) => {
+        if (!farmId) throw new Error('No farm selected');
         try {
             const id = uuidv4();
             await db.execute(
@@ -117,6 +120,7 @@ export const useGrain = () => {
     };
 
     const updateBin = async (id: string, name: string, capacity: number, crop_type: string, landlord_id?: string | null, landlord_share_pct?: number | null) => {
+        if (!farmId) throw new Error('No farm selected');
         try {
             await db.execute(
                 'UPDATE bins SET name = ?, capacity = ?, crop_type = ?, landlord_id = ?, landlord_share_pct = ? WHERE id = ? AND farm_id = ?',
@@ -130,6 +134,7 @@ export const useGrain = () => {
     };
 
     const deleteBin = async (id: string) => {
+        if (!farmId) throw new Error('No farm selected');
         try {
             await db.execute('DELETE FROM bins WHERE id = ? AND farm_id = ?', [id, farmId]);
             await recordAudit({ action: 'DELETE', tableName: 'bins', recordId: id, farmId: farmId, changes: { id } });
@@ -140,6 +145,7 @@ export const useGrain = () => {
     };
 
     const deleteGrainLog = async (id: string) => {
+        if (!farmId) throw new Error('No farm selected');
         try {
             await db.execute('DELETE FROM grain_logs WHERE id = ? AND farm_id = ?', [id, farmId]);
             await recordAudit({ action: 'DELETE', tableName: 'grain_logs', recordId: id, farmId: farmId, changes: { id } });

@@ -51,10 +51,11 @@ export const useSpray = () => {
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [sprayLogs, setSprayLogs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const { settings } = useSettings();
-    const farmId = settings?.farm_id || 'default_farm';
+    const { settings, loading: settingsLoading } = useSettings();
+    const farmId = settings?.farm_id;
 
     useEffect(() => {
+        if (!farmId || settingsLoading) return;
         const abortController = new AbortController();
 
         // Watch recipes with items joined
@@ -147,6 +148,7 @@ export const useSpray = () => {
         notes?: string;
         id?: string;
     }) => {
+        if (!farmId) throw new Error('No farm selected');
         try {
             const id = params.id || uuidv4();
             const {
@@ -253,6 +255,7 @@ export const useSpray = () => {
     };
 
     const addRecipe = async (recipe: Omit<Recipe, 'id'>) => {
+        if (!farmId) throw new Error('No farm selected');
         const id = uuidv4();
         const now = new Date().toISOString();
 
@@ -275,6 +278,7 @@ export const useSpray = () => {
     };
 
     const updateRecipe = async (id: string, recipe: Partial<Recipe>) => {
+        if (!farmId) throw new Error('No farm selected');
         const now = new Date().toISOString();
 
         await db.execute(
@@ -298,12 +302,14 @@ export const useSpray = () => {
     };
 
     const deleteRecipe = async (id: string) => {
+        if (!farmId) throw new Error('No farm selected');
         await db.execute('DELETE FROM recipes WHERE id = ? AND farm_id = ?', [id, farmId]);
         await db.execute('DELETE FROM recipe_items WHERE recipe_id = ? AND farm_id = ?', [id, farmId]);
         await recordAudit({ action: 'DELETE', tableName: 'recipes', recordId: id, farmId: farmId, changes: { id } });
     };
 
     const deleteSprayLog = async (id: string) => {
+        if (!farmId) throw new Error('No farm selected');
         await db.execute('DELETE FROM spray_logs WHERE id = ? AND farm_id = ?', [id, farmId]);
         await recordAudit({ action: 'DELETE', tableName: 'spray_logs', recordId: id, farmId: farmId, changes: { id } });
     };

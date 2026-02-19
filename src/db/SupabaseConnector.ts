@@ -14,6 +14,18 @@ export class SupabaseConnector implements PowerSyncBackendConnector {
         this.client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     }
 
+    /** Unified helper for getting the current session */
+    async getSession() {
+        const { data: { session } } = await this.client.auth.getSession();
+        return session;
+    }
+
+    /** Unified helper for getting the current user */
+    async getUser() {
+        const { data: { user } } = await this.client.auth.getUser();
+        return user;
+    }
+
     async ensureInitialized() {
         // No-op for hardcoded config
         return Promise.resolve();

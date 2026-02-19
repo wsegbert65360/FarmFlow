@@ -137,7 +137,10 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
         if (!settings?.farm_id) return;
         setGeneratingInvite(true);
         try {
-            const token = Math.random().toString(36).substring(2, 11).toUpperCase(); // Simple random token
+            const user = await connector.getUser();
+            if (!user) throw new Error('User session not found');
+
+            const token = Math.random().toString(36).substring(2, 11).toUpperCase();
             const { error } = await connector.client
                 .from('invites')
                 .insert({

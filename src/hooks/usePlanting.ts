@@ -26,10 +26,11 @@ export const usePlanting = () => {
     const [seeds, setSeeds] = useState<SeedVariety[]>([]);
     const [plantingLogs, setPlantingLogs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const { settings } = useSettings();
-    const farmId = settings?.farm_id || 'default_farm';
+    const { settings, loading: settingsLoading } = useSettings();
+    const farmId = settings?.farm_id;
 
     useEffect(() => {
+        if (!farmId || settingsLoading) return;
         const abortController = new AbortController();
 
         // Watch seeds
@@ -72,6 +73,7 @@ export const usePlanting = () => {
         depth: number;
         notes?: string;
     }) => {
+        if (!farmId) throw new Error('No farm selected');
         try {
             const id = uuidv4();
             const now = new Date().toISOString();
@@ -127,6 +129,7 @@ export const usePlanting = () => {
     };
 
     const addSeed = async (seed: Omit<SeedVariety, 'id'>) => {
+        if (!farmId) throw new Error('No farm selected');
         const id = uuidv4();
         await db.execute(
             'INSERT INTO seed_varieties (id, brand, variety_name, type, default_population, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -136,6 +139,7 @@ export const usePlanting = () => {
     };
 
     const updateSeed = async (id: string, seed: Partial<SeedVariety>) => {
+        if (!farmId) throw new Error('No farm selected');
         await db.execute(
             'UPDATE seed_varieties SET brand = ?, variety_name = ?, type = ?, default_population = ? WHERE id = ? AND farm_id = ?',
             [seed.brand, seed.variety_name, seed.type, seed.default_population, id, farmId]
@@ -144,11 +148,13 @@ export const usePlanting = () => {
     };
 
     const deleteSeed = async (id: string) => {
+        if (!farmId) throw new Error('No farm selected');
         await db.execute('DELETE FROM seed_varieties WHERE id = ? AND farm_id = ?', [id, farmId]);
         await recordAudit({ action: 'DELETE', tableName: 'seed_varieties', recordId: id, farmId: farmId, changes: { id } });
     };
 
     const deletePlantingLog = async (id: string) => {
+        if (!farmId) throw new Error('No farm selected');
         await db.execute('DELETE FROM planting_logs WHERE id = ? AND farm_id = ?', [id, farmId]);
         await recordAudit({ action: 'DELETE', tableName: 'planting_logs', recordId: id, farmId: farmId, changes: { id } });
     };

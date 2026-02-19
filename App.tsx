@@ -53,24 +53,42 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 3. Auto-sync on login: push local data to cloud, then pull updates
+  // 3. Centralized handleSync function
+  const handleSync = async () => {
+    if (!session?.user) return;
+    const { SyncUtility } = require('./src/utils/SyncUtility');
+    if (SyncUtility.isNativeStreamingAvailable()) return;
+
+    setBootstrapping(true);
+    try {
+      const { SyncUtility } = require('./src/utils/SyncUtility');
+      const { showAlert } = require('./src/utils/AlertUtility');
+      const result = await SyncUtility.performFullSync(session.user.id);
+
+      if (result.success) {
+        setIsConnected(true);
+      } else {
+        // Only show alert if it's not a "no farm data" case which might be normal before onboarding
+        if (!result.message.includes('complete onboarding')) {
+          showAlert('Sync Warning', result.message);
+        }
+      }
+    } catch (e: any) {
+      console.error('[Sync Error]', e);
+    } finally {
+      setBootstrapping(false);
+    }
+  };
+
+  // 4. Auto-sync on login: push local data to cloud, then pull updates
   useEffect(() => {
     if (session?.user && !authLoading) {
       const { SyncUtility } = require('./src/utils/SyncUtility');
       if (!SyncUtility.isNativeStreamingAvailable()) {
-        setBootstrapping(true);
-        // Wait for PowerSync to load data from IndexedDB before pushing
-        setTimeout(async () => {
-          try {
-            await SyncUtility.pushAllLocalData();
-            await SyncUtility.bootstrapDevice(session.user.id);
-            setIsConnected(true); // Mark as synced
-          } catch (e) {
-            console.error('[AutoSync]', e);
-          } finally {
-            setBootstrapping(false);
-          }
-        }, 2000);
+        // We still use a small delay to ensure PowerSync is ready, 
+        // but we'll make it shorter and less critical
+        const timer = setTimeout(handleSync, 1000);
+        return () => clearTimeout(timer);
       }
     }
   }, [session?.user?.id, authLoading]);
@@ -144,23 +162,7 @@ export default function App() {
           </View>
           <TouchableOpacity
             style={styles.syncContainer}
-            onPress={async () => {
-              const { SyncUtility } = require('./src/utils/SyncUtility');
-              const { showAlert } = require('./src/utils/AlertUtility');
-              if (session?.user && !SyncUtility.isNativeStreamingAvailable()) {
-                setBootstrapping(true);
-                try {
-                  const result = await SyncUtility.pushAllLocalData();
-                  await SyncUtility.bootstrapDevice(session.user.id);
-                  setIsConnected(true);
-                  showAlert('Sync Complete', `Pushed ${result.pushed} rows to cloud.`);
-                } catch (err: any) {
-                  showAlert('Sync Failed', String(err?.message || err));
-                } finally {
-                  setBootstrapping(false);
-                }
-              }
-            }}
+            onPress={handleSync}
           >
             <View style={[styles.syncDot, { backgroundColor: isConnected ? Theme.colors.success : Theme.colors.secondary }]} />
             <Text style={styles.syncText}>🔄 SYNC</Text>
@@ -171,25 +173,7 @@ export default function App() {
       <ResponsiveLayout
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onSyncPress={async () => {
-          const { SyncUtility } = require('./src/utils/SyncUtility');
-          const { showAlert } = require('./src/utils/AlertUtility');
-
-          if (!session?.user || SyncUtility.isNativeStreamingAvailable()) return;
-
-          try {
-            setBootstrapping(true);
-            // Push local data to cloud, then pull any new data back
-            const result = await SyncUtility.pushAllLocalData();
-            await SyncUtility.bootstrapDevice(session.user.id);
-            setIsConnected(true);
-            showAlert('Sync Complete', `Pushed ${result.pushed} rows to cloud.\nYour farm data is now available on all devices.`);
-          } catch (err: any) {
-            showAlert('Sync Error', err.message);
-          } finally {
-            setBootstrapping(false);
-          }
-        }}
+        onSyncPress={handleSync}
         farmName={settings?.farm_name || 'FarmFlow'}
         isConnected={isConnected}
         isSyncing={bootstrapping}
@@ -198,17 +182,7 @@ export default function App() {
           <StatusOverlay
             isConnected={isConnected}
             isSyncing={bootstrapping}
-            onRetry={() => {
-              // Direct retry logic for mobile overlay
-              const { SyncUtility } = require('./src/utils/SyncUtility');
-              if (session?.user && !SyncUtility.isNativeStreamingAvailable()) {
-                setBootstrapping(true);
-                SyncUtility.pushAllLocalData()
-                  .then(() => SyncUtility.bootstrapDevice(session.user.id))
-                  .then(() => setIsConnected(true))
-                  .finally(() => setBootstrapping(false));
-              }
-            }}
+            onRetry={handleSync}
           />
         )}
 

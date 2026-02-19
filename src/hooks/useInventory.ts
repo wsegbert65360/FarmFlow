@@ -13,10 +13,11 @@ export interface InventoryItem {
 export const useInventory = () => {
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
     const [loading, setLoading] = useState(true);
-    const { settings } = useSettings();
-    const farmId = settings?.farm_id || 'default_farm';
+    const { settings, loading: settingsLoading } = useSettings();
+    const farmId = settings?.farm_id;
 
     useEffect(() => {
+        if (!farmId || settingsLoading) return;
         const abortController = new AbortController();
 
         db.watch(
@@ -39,6 +40,7 @@ export const useInventory = () => {
     }, [farmId]);
 
     const updateQuantity = async (productName: string, newQuantity: number) => {
+        if (!farmId) throw new Error('No farm selected');
         await db.execute(
             'INSERT OR REPLACE INTO inventory (id, product_name, quantity_on_hand, unit, farm_id) VALUES ((SELECT id FROM inventory WHERE product_name = ? AND farm_id = ?), ?, ?, ?, ?)',
             [productName, farmId, productName, newQuantity, 'Units', farmId]
