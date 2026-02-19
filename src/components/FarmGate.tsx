@@ -1,3 +1,10 @@
+import React from 'react';
+import { StyleSheet, Text, View, ActivityIndicator } from 'react-native';
+import { useSettings } from '../hooks/useSettings';
+import { useAuth } from '../context/AuthProvider';
+import { Theme } from '../constants/Theme';
+import { OnboardingScreen } from '../screens/OnboardingScreen';
+
 export const FarmGate = ({ children }: { children: React.ReactNode }) => {
     const { settings, loading } = useSettings();
     const { session } = useAuth();
