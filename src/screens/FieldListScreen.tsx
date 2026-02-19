@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, Modal, TextInput, SafeAreaView, Alert } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, Modal, TextInput, SafeAreaView, ScrollView, useWindowDimensions, Platform } from 'react-native';
+import { showAlert } from '../utils/AlertUtility';
 import { Theme } from '../constants/Theme';
 import { useFields, Field } from '../hooks/useFields';
 import { useInventory } from '../hooks/useInventory';
@@ -12,6 +13,10 @@ interface FieldListProps {
 export const FieldListScreen = ({ onSelectAction }: FieldListProps) => {
     const { fields, loading: fieldsLoading, addField } = useFields();
     const { atRiskCount, loading: inventoryLoading } = useInventory();
+    const { width } = useWindowDimensions();
+
+    const isDesktop = width > 768;
+    const numColumns = isDesktop ? (width > 1200 ? 3 : 2) : 1;
 
     const loading = fieldsLoading || inventoryLoading;
     const [modalVisible, setModalVisible] = useState(false);
@@ -33,7 +38,7 @@ export const FieldListScreen = ({ onSelectAction }: FieldListProps) => {
             setNewAcreage('');
             setModalVisible(false);
         } catch (error) {
-            alert('Failed to add field.');
+            showAlert('Error', 'Failed to add field.');
         }
     };
 
@@ -74,10 +79,13 @@ export const FieldListScreen = ({ onSelectAction }: FieldListProps) => {
             )}
 
             <FlatList
+                key={`${numColumns}`}
                 data={fields}
                 renderItem={renderField}
                 keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.list}
+                numColumns={numColumns}
+                contentContainerStyle={[styles.list, isDesktop && { paddingHorizontal: Theme.spacing.xl }]}
+                columnWrapperStyle={numColumns > 1 ? { gap: Theme.spacing.md } : undefined}
                 refreshing={loading}
                 ListEmptyComponent={
                     <View style={styles.emptyState}>
@@ -211,10 +219,11 @@ export const FieldListScreen = ({ onSelectAction }: FieldListProps) => {
                             style={[styles.saveButton, { marginTop: Theme.spacing.lg }]}
                             onPress={async () => {
                                 if (!selectedField || !selectedLandlordId) return;
+                                // Convention: share_percentage is stored as a decimal (e.g., 0.5 for 50%)
                                 await addFieldSplit(selectedField.id, selectedLandlordId, parseFloat(splitPercentage) / 100);
                                 setSplitPercentage('50');
                                 setSelectedLandlordId('');
-                                Alert.alert('Saved', 'Landlord share updated.');
+                                showAlert('Saved', 'Landlord share updated.');
                             }}
                         >
                             <Text style={styles.saveButtonText}>Add/Update Share</Text>
@@ -252,11 +261,18 @@ const styles = StyleSheet.create({
         padding: Theme.spacing.lg,
         borderRadius: Theme.borderRadius.md,
         marginBottom: Theme.spacing.md,
+        flex: 1,
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         borderWidth: 1,
         borderColor: Theme.colors.border,
+        ...Platform.select({
+            web: {
+                transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                cursor: 'pointer',
+            },
+        } as any),
     },
     fieldName: { ...Theme.typography.h2 },
     fieldAcreage: { ...Theme.typography.body, color: Theme.colors.textSecondary },

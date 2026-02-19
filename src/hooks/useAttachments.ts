@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../db/powersync';
 import { v4 as uuidv4 } from 'uuid';
 import { useSettings } from './useSettings';
+import { recordAudit } from '../utils/DatabaseUtility';
 
 export interface Attachment {
     id: string;
@@ -73,5 +74,16 @@ export const useAttachments = (ownerRecordId?: string) => {
         return id;
     };
 
-    return { attachments, loading, addAttachment };
+    const deleteAttachment = async (id: string) => {
+        await db.execute('DELETE FROM attachments WHERE id = ? AND farm_id = ?', [id, farmId]);
+        await recordAudit({
+            action: 'DELETE',
+            tableName: 'attachments',
+            recordId: id,
+            farmId: farmId,
+            changes: { id }
+        });
+    };
+
+    return { attachments, loading, addAttachment, deleteAttachment };
 };

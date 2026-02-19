@@ -1,29 +1,41 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions } from 'react-native';
+import { showAlert, showConfirm, showDeleteConfirm } from '../utils/AlertUtility';
 import QRCode from 'react-native-qrcode-svg';
 import { Theme } from '../constants/Theme';
-import { useSpray, Recipe } from '../hooks/useSpray';
+import { useSpray, Recipe, RecipeItem } from '../hooks/useSpray';
 import { usePlanting, SeedVariety } from '../hooks/usePlanting';
 import { useLandlords, Landlord } from '../hooks/useLandlords';
 import { useGrain } from '../hooks/useGrain';
 import { generateReport } from '../utils/ReportUtility';
 import { generateDiagnosticReport } from '../utils/DiagnosticUtility';
 import { useSettings } from '../hooks/useSettings';
+import { lookupEPA, calculateMaxRestrictions } from '../utils/EPAUtility';
 
 type VaultTab = 'CHEMICALS' | 'SEEDS' | 'LANDLORDS' | 'REPORTS' | 'SETTINGS';
 type VaultItem = Recipe | SeedVariety | Landlord;
 
-export const VaultScreen = () => {
-    const [activeTab, setActiveTab] = useState<VaultTab>('CHEMICALS');
+export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
+    const [activeTab, setActiveTab] = useState<VaultTab>(initialTab || 'CHEMICALS');
     const { recipes, addRecipe, updateRecipe, deleteRecipe, sprayLogs, loading: recipesLoading } = useSpray();
     const { seeds, addSeed, updateSeed, deleteSeed, loading: seedsLoading } = usePlanting();
-    const { landlords, fieldSplits, loading: landlordsLoading, addLandlord, deleteSplit } = useLandlords();
+    const { landlords, fieldSplits, loading: landlordsLoading, addLandlord, deleteSplit, deleteLandlord } = useLandlords();
     const { grainLogs, loading: grainLoading } = useGrain();
     const { settings, saveSettings } = useSettings();
+    const { width } = useWindowDimensions();
+
+    const isDesktop = width > 768;
+    const numColumns = isDesktop ? (width > 1200 ? 3 : 2) : 1;
 
     const [modalVisible, setModalVisible] = useState(false);
     const [editingItem, setEditingItem] = useState<VaultItem | null>(null);
     const [saving, setSaving] = useState(false);
+
+    React.useEffect(() => {
+        if (initialTab) {
+            setActiveTab(initialTab);
+        }
+    }, [initialTab]);
 
     // Form State
     const [name, setName] = useState('');
@@ -35,6 +47,9 @@ export const VaultScreen = () => {
     const [population, setPopulation] = useState('');
     const [phi, setPhi] = useState('0');
     const [rei, setRei] = useState('0');
+    const [recipeItems, setRecipeItems] = useState<Omit<RecipeItem, 'id' | 'recipe_id'>[]>([
+        { product_name: '', epa_number: '', rate: 0, unit: 'Gal' }
+    ]);
 
     const reportActions = [
         { id: '1', title: 'EPA Spray Records', type: 'EPA_SPRAY', icon: 'sc-sprayer' },
@@ -48,12 +63,15 @@ export const VaultScreen = () => {
             if (activeTab === 'CHEMICALS') {
                 const recipe = item as Recipe;
                 setName(recipe.name);
-                setProduct(recipe.product_name);
-                setEpa(recipe.epa_number);
-                setRate(recipe.rate_per_acre.toString());
                 setWater(recipe.water_rate_per_acre.toString());
                 setPhi(recipe.phi_days?.toString() || '0');
                 setRei(recipe.rei_hours?.toString() || '0');
+                setRecipeItems(recipe.items?.map(i => ({
+                    product_name: i.product_name,
+                    epa_number: i.epa_number,
+                    rate: i.rate,
+                    unit: i.unit
+                })) || [{ product_name: '', epa_number: '', rate: 0, unit: 'Gal' }]);
             } else if (activeTab === 'SEEDS') {
                 const seed = item as SeedVariety;
                 setBrand(seed.brand);
@@ -75,8 +93,40 @@ export const VaultScreen = () => {
             setPopulation('');
             setPhi('0');
             setRei('0');
+            setRecipeItems([{ product_name: '', epa_number: '', rate: 0, unit: 'Gal' }]);
         }
         setModalVisible(true);
+    };
+
+    const handleSmartFill = () => {
+        const epas = recipeItems.map(i => i.epa_number).filter(e => !!e);
+        if (epas.length === 0) {
+            showAlert('No EPA Numbers', 'Enter at least one EPA number to auto-fill safety data.');
+            return;
+        }
+
+        const { phi: suggestedPhi, rei: suggestedRei } = calculateMaxRestrictions(epas);
+        setPhi(suggestedPhi.toString());
+        setRei(suggestedRei.toString());
+
+        // Help with product names for ALL items that have EPAs but no names
+        let namesUpdated = false;
+        const newItems = recipeItems.map(item => {
+            if (!item.product_name && item.epa_number) {
+                const info = lookupEPA(item.epa_number);
+                if (info) {
+                    namesUpdated = true;
+                    return { ...item, product_name: info.productName };
+                }
+            }
+            return item;
+        });
+
+        if (namesUpdated) setRecipeItems(newItems);
+
+        const feedback = `Safety data calculated:\nPHI: ${suggestedPhi} Days\nREI: ${suggestedRei} Hours${namesUpdated ? '\n\nProduct names auto-filled.' : ''}`;
+
+        showAlert('Smart Fill Active', feedback);
     };
 
     const handleSave = async () => {
@@ -85,12 +135,10 @@ export const VaultScreen = () => {
             if (activeTab === 'CHEMICALS') {
                 const data = {
                     name,
-                    product_name: product,
-                    epa_number: epa,
-                    rate_per_acre: parseFloat(rate) || 0,
                     water_rate_per_acre: parseFloat(water) || 0,
                     phi_days: parseInt(phi) || 0,
                     rei_hours: parseInt(rei) || 0,
+                    items: recipeItems as RecipeItem[]
                 };
                 if (editingItem) await updateRecipe(editingItem.id, data);
                 else await addRecipe(data);
@@ -105,52 +153,53 @@ export const VaultScreen = () => {
                 else await addSeed(data);
             } else {
                 if (editingItem) {
-                    Alert.alert('Info', 'Update not implemented for Landlords yet. Delete and re-add.');
+                    const msg = 'Update not implemented for Landlords yet. Delete and re-add.';
+                    showAlert('Info', msg);
                 } else {
                     await addLandlord(name, product);
                 }
             }
             setModalVisible(false);
         } catch (e) {
-            Alert.alert('Error', 'Failed to save item');
+            const msg = 'Failed to save item';
+            showAlert('Error', msg);
         } finally {
             setSaving(false);
         }
     };
 
     const handleDelete = () => {
-        Alert.alert('Delete', 'Are you sure?', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: async () => {
-                    if (!editingItem) return;
-                    if (activeTab === 'CHEMICALS') await deleteRecipe(editingItem.id);
-                    else if (activeTab === 'SEEDS') await deleteSeed(editingItem.id);
-                    // Landlord deletion not fully implemented in hook yet, ignoring for now or using deleteSplit if it was a split
-                    setModalVisible(false);
-                }
+        showDeleteConfirm('this item', async () => {
+            if (editingItem) {
+                // Determine item type and call correct delete
+                if ('water_rate_per_acre' in editingItem) await deleteRecipe(editingItem.id);
+                else if ('brand' in editingItem) await deleteSeed(editingItem.id);
+                else if ('email' in editingItem) await deleteLandlord(editingItem.id); // Fixed: Added landlord delete support
+                setModalVisible(false);
             }
-        ]);
+        });
     };
 
     const renderRecipe = ({ item }: { item: Recipe }) => (
-        <TouchableOpacity style={styles.card} onPress={() => openModal(item)}>
+        <TouchableOpacity style={[styles.card, isDesktop && { flex: 1 / numColumns - 0.05 }]} onPress={() => openModal(item)}>
             <Text style={styles.cardTitle}>{item.name}</Text>
-            <Text style={styles.cardSub}>{item.product_name} • {item.rate_per_acre} Gal/ac</Text>
+            <Text style={styles.cardSub}>
+                {item.items && item.items.length > 0
+                    ? `${item.items.length} Products • ${item.water_rate_per_acre} Gal/ac`
+                    : `${item.product_name || 'No Products'} • ${item.rate_per_acre || 0} Gal/ac`}
+            </Text>
         </TouchableOpacity>
     );
 
     const renderSeed = ({ item }: { item: SeedVariety }) => (
-        <TouchableOpacity style={styles.card} onPress={() => openModal(item)}>
+        <TouchableOpacity style={[styles.card, isDesktop && { flex: 1 / numColumns - 0.05 }]} onPress={() => openModal(item)}>
             <Text style={styles.cardTitle}>{item.brand} {item.variety_name}</Text>
             <Text style={styles.cardSub}>{item.default_population.toLocaleString()} plants/ac</Text>
         </TouchableOpacity>
     );
 
     const renderLandlord = ({ item }: { item: Landlord }) => (
-        <TouchableOpacity style={styles.card} onPress={() => openModal(item as any)}>
+        <TouchableOpacity style={[styles.card, isDesktop && { flex: 1 / numColumns - 0.05 }]} onPress={() => openModal(item as any)}>
             <Text style={styles.cardTitle}>{item.name}</Text>
             <Text style={styles.cardSub}>{item.email || 'No email'}</Text>
         </TouchableOpacity>
@@ -183,16 +232,17 @@ export const VaultScreen = () => {
                         });
                         await generateReport({
                             farmName: settings?.farm_name || 'My Farm',
-                            dateRange: '2024 Season',
+                            dateRange: `${new Date().getFullYear()} Season`,
                             logs: landlordData,
                             type: 'LANDLORD_HARVEST'
                         });
                     } else {
                         await generateDiagnosticReport();
                     }
-                    Alert.alert('Success', 'Report generated and ready to share.');
+                    const msg = 'Report generated and ready to share.';
+                    showAlert('Success', msg);
                 } catch (e) {
-                    Alert.alert('Error', 'Failed to generate report.');
+                    showAlert('Error', 'Failed to generate report');
                 } finally {
                     setSaving(false);
                 }
@@ -226,14 +276,15 @@ export const VaultScreen = () => {
                     <Text style={[styles.tabText, activeTab === 'LANDLORDS' && styles.activeTabText, activeTab === 'LANDLORDS' && { color: Theme.colors.warning }]}>Landlords</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[styles.tab, activeTab === 'SETTINGS' && styles.activeTab, activeTab === 'SETTINGS' && { borderBottomColor: Theme.colors.textSecondary }]}
+                    style={[styles.tab, activeTab === 'SETTINGS' && styles.activeTab, activeTab === 'SETTINGS' && { borderBottomColor: Theme.colors.secondary }]}
                     onPress={() => setActiveTab('SETTINGS')}
                 >
-                    <Text style={[styles.tabText, activeTab === 'SETTINGS' && styles.activeTabText, activeTab === 'SETTINGS' && { color: Theme.colors.textSecondary }]}>Settings</Text>
+                    <Text style={[styles.tabText, activeTab === 'SETTINGS' && styles.activeTabText, activeTab === 'SETTINGS' && { color: Theme.colors.secondary }]}>Sync & Team</Text>
                 </TouchableOpacity>
             </View>
 
             <FlatList
+                key={`${activeTab}-${numColumns}`}
                 data={(
                     activeTab === 'CHEMICALS' ? recipes :
                         activeTab === 'SEEDS' ? seeds :
@@ -250,7 +301,7 @@ export const VaultScreen = () => {
                             activeTab === 'LANDLORDS' ? (renderLandlord as any) :
                                 activeTab === 'REPORTS' ? (renderReportAction as any) :
                                     (() => (
-                                        <View style={styles.card}>
+                                        <View style={[styles.card, isDesktop && { maxWidth: 800 }]}>
                                             <Text style={styles.sectionLabel}>Applicator Default Information</Text>
                                             <TextInput
                                                 style={styles.input}
@@ -265,39 +316,29 @@ export const VaultScreen = () => {
                                                 onChangeText={(v) => saveSettings({ default_applicator_cert: v })}
                                             />
 
-                                            <Text style={styles.sectionLabel}>Supabase Cloud Bridge</Text>
-                                            <TextInput
-                                                style={styles.input}
-                                                placeholder="Supabase Anon Key"
-                                                secureTextEntry
-                                                value={settings?.supabase_anon_key}
-                                                onChangeText={(v) => saveSettings({ supabase_anon_key: v })}
-                                            />
-                                            <TextInput
-                                                style={styles.input}
-                                                placeholder="Farm Join Token"
-                                                secureTextEntry
-                                                value={settings?.farm_join_token}
-                                                onChangeText={(v) => saveSettings({ farm_join_token: v })}
-                                            />
+                                            <Text style={styles.sectionLabel}>Farm ID & Online Access</Text>
+                                            <View style={styles.input}>
+                                                <Text style={{ fontSize: 12, color: Theme.colors.textSecondary }}>Active Farm ID:</Text>
+                                                <Text style={{ fontWeight: 'bold' }}>{settings?.farm_id}</Text>
+                                            </View>
 
-                                            {settings?.supabase_anon_key && settings?.farm_join_token ? (
+                                            {settings?.farm_id ? (
                                                 <View style={styles.qrContainer}>
-                                                    <Text style={styles.qrLabel}>Cloud Sync QR (Scan on Mobile)</Text>
+                                                    <Text style={styles.qrLabel}>Farm Invitation QR</Text>
                                                     <View style={styles.qrWrapper}>
                                                         <QRCode
                                                             value={JSON.stringify({
-                                                                k: settings.supabase_anon_key,
-                                                                t: settings.farm_join_token,
                                                                 f: settings.farm_id,
                                                                 n: settings.farm_name
                                                             })}
-                                                            size={160}
+                                                            size={200}
+                                                            quietZone={10}
                                                         />
                                                     </View>
+                                                    <Text style={styles.cardSub}>Scan this on another device to join <Text style={{ fontWeight: 'bold' }}>{settings.farm_name}</Text>.</Text>
                                                 </View>
                                             ) : (
-                                                <Text style={styles.cardSub}>Enter your Supabase Anon Key and Farm Join Token to generate a sync QR.</Text>
+                                                <Text style={styles.cardSub}>Complete onboarding to generate a farm invite QR.</Text>
                                             )}
 
                                             <Text style={styles.cardSub}>These details will auto-fill your spray logs to meet state audit requirements.</Text>
@@ -305,6 +346,8 @@ export const VaultScreen = () => {
                                     )) as any
                 }
                 keyExtractor={item => item.id}
+                numColumns={activeTab === 'SETTINGS' ? 1 : numColumns}
+                columnWrapperStyle={numColumns > 1 && activeTab !== 'SETTINGS' ? { gap: Theme.spacing.md } : undefined}
                 initialNumToRender={10}
                 windowSize={5}
                 contentContainerStyle={styles.list}
@@ -314,7 +357,7 @@ export const VaultScreen = () => {
                             {activeTab === 'CHEMICALS' ? 'Spray Recipes' :
                                 activeTab === 'SEEDS' ? 'Seed Varieties' :
                                     activeTab === 'LANDLORDS' ? 'Landlords' :
-                                        activeTab === 'SETTINGS' ? 'Farm Settings' : 'Compliance Reports'}
+                                        activeTab === 'SETTINGS' ? 'Sync & Team' : 'Compliance Reports'}
                         </Text>
                         {activeTab !== 'REPORTS' && activeTab !== 'SETTINGS' && (
                             <TouchableOpacity
@@ -344,11 +387,80 @@ export const VaultScreen = () => {
                         {activeTab === 'CHEMICALS' ? (
                             <>
                                 <TextInput style={styles.input} placeholder="Recipe Name (e.g. Early Post)" value={name} onChangeText={setName} />
-                                <TextInput style={styles.input} placeholder="Product Name" value={product} onChangeText={setProduct} />
-                                <TextInput style={styles.input} placeholder="EPA Number" value={epa} onChangeText={setEpa} />
-                                <TextInput style={styles.input} placeholder="Product Rate (Gal/Ac)" value={rate} onChangeText={setRate} keyboardType="numeric" />
                                 <TextInput style={styles.input} placeholder="Water Rate (Gal/Ac)" value={water} onChangeText={setWater} keyboardType="numeric" />
-                                <View style={{ flexDirection: 'row', gap: 10 }}>
+
+                                <Text style={styles.sectionLabel}>Chemical Composition</Text>
+                                {recipeItems.map((item, index) => (
+                                    <View key={index} style={styles.recipeItemRow}>
+                                        <View style={{ flex: 2 }}>
+                                            <TextInput
+                                                style={[styles.input, { marginBottom: 5 }]}
+                                                placeholder="Product Name"
+                                                value={item.product_name}
+                                                onChangeText={(v) => {
+                                                    const newItems = [...recipeItems];
+                                                    newItems[index].product_name = v;
+                                                    setRecipeItems(newItems);
+                                                }}
+                                            />
+                                            <TextInput
+                                                style={[styles.input, { fontSize: 12, padding: 8 }]}
+                                                placeholder="EPA # (Optional for non-regulated)"
+                                                value={item.epa_number}
+                                                onChangeText={(v) => {
+                                                    const newItems = [...recipeItems];
+                                                    newItems[index].epa_number = v;
+                                                    setRecipeItems(newItems);
+                                                }}
+                                            />
+                                        </View>
+                                        <View style={{ flex: 1, marginLeft: 10 }}>
+                                            <TextInput
+                                                style={styles.input}
+                                                placeholder="Rate"
+                                                value={item.rate.toString()}
+                                                keyboardType="numeric"
+                                                onChangeText={(v) => {
+                                                    const newItems = [...recipeItems];
+                                                    newItems[index].rate = parseFloat(v) || 0;
+                                                    setRecipeItems(newItems);
+                                                }}
+                                            />
+                                            <View style={styles.unitToggle}>
+                                                {['oz', 'Gal', 'lbs', 'pt'].map((u) => (
+                                                    <TouchableOpacity
+                                                        key={u}
+                                                        onPress={() => {
+                                                            const newItems = [...recipeItems];
+                                                            newItems[index].unit = u;
+                                                            setRecipeItems(newItems);
+                                                        }}
+                                                        style={[styles.unitBtn, item.unit === u && styles.unitBtnActive]}
+                                                    >
+                                                        <Text style={[styles.unitBtnText, item.unit === u && styles.unitBtnTextActive]}>{u}</Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                        </View>
+                                        {recipeItems.length > 1 && (
+                                            <TouchableOpacity
+                                                onPress={() => setRecipeItems(recipeItems.filter((_, i) => i !== index))}
+                                                style={styles.removeBtn}
+                                            >
+                                                <Text style={{ color: Theme.colors.danger, fontWeight: 'bold' }}>×</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                ))}
+
+                                <TouchableOpacity
+                                    style={styles.addItemBtn}
+                                    onPress={() => setRecipeItems([...recipeItems, { product_name: '', epa_number: '', rate: 0, unit: 'Gal' }])}
+                                >
+                                    <Text style={{ color: Theme.colors.primary, fontWeight: 'bold' }}>+ ADD PRODUCT</Text>
+                                </TouchableOpacity>
+
+                                <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
                                     <View style={{ flex: 1 }}>
                                         <Text style={styles.sectionLabel}>PHI (Days)</Text>
                                         <TextInput style={styles.input} placeholder="PHI Days" value={phi} onChangeText={setPhi} keyboardType="numeric" />
@@ -358,6 +470,16 @@ export const VaultScreen = () => {
                                         <TextInput style={styles.input} placeholder="REI Hours" value={rei} onChangeText={setRei} keyboardType="numeric" />
                                     </View>
                                 </View>
+
+                                <TouchableOpacity
+                                    style={styles.smartFillBtn}
+                                    onPress={handleSmartFill}
+                                >
+                                    <Text style={styles.smartFillText}>✨ SMART AUTO-FILL SAFETY DATA</Text>
+                                </TouchableOpacity>
+                                <Text style={{ fontSize: 10, color: Theme.colors.textSecondary, fontStyle: 'italic', textAlign: 'center' }}>
+                                    Calculates most restrictive PHI/REI from EPA numbers.
+                                </Text>
                             </>
                         ) : activeTab === 'SEEDS' ? (
                             <>
@@ -393,13 +515,18 @@ export const VaultScreen = () => {
                     </ScrollView>
                 </KeyboardAvoidingView>
             </Modal>
-        </View>
+        </View >
     );
 };
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Theme.colors.background },
-    tabContainer: { flexDirection: 'row', backgroundColor: Theme.colors.white, borderBottomWidth: 1, borderBottomColor: Theme.colors.border },
+    tabContainer: {
+        flexDirection: 'row',
+        backgroundColor: Theme.colors.white,
+        borderBottomWidth: 1,
+        borderBottomColor: Theme.colors.border,
+    },
     tab: { flex: 1, padding: Theme.spacing.md, alignItems: 'center' },
     activeTab: { borderBottomWidth: 3, borderBottomColor: Theme.colors.primary },
     tabText: { ...Theme.typography.body, color: Theme.colors.textSecondary },
@@ -414,8 +541,8 @@ const styles = StyleSheet.create({
     card: { backgroundColor: Theme.colors.white, padding: Theme.spacing.lg, borderRadius: Theme.borderRadius.md, marginBottom: Theme.spacing.md, ...Theme.shadows.sm },
     cardTitle: { ...Theme.typography.body, fontWeight: 'bold' },
     cardSub: { ...Theme.typography.caption, color: Theme.colors.textSecondary, marginTop: 4 },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalContent: { backgroundColor: Theme.colors.white, borderTopLeftRadius: Theme.borderRadius.lg, borderTopRightRadius: Theme.borderRadius.lg, padding: Theme.spacing.xl },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+    modalContent: { backgroundColor: Theme.colors.white, borderRadius: Theme.borderRadius.lg, padding: Theme.spacing.xl, width: '90%', maxWidth: 500 },
     modalTitle: { ...Theme.typography.h2, marginBottom: Theme.spacing.lg },
     input: { borderWidth: 1, borderColor: Theme.colors.border, padding: Theme.spacing.md, borderRadius: Theme.borderRadius.sm, fontSize: 16, marginBottom: Theme.spacing.md },
     modalActions: { flexDirection: 'row', marginTop: Theme.spacing.lg },
@@ -427,5 +554,15 @@ const styles = StyleSheet.create({
     sectionLabel: { ...Theme.typography.caption, fontWeight: 'bold', marginTop: Theme.spacing.md, marginBottom: Theme.spacing.xs, color: Theme.colors.textSecondary, textTransform: 'uppercase' },
     qrContainer: { alignItems: 'center', marginTop: Theme.spacing.lg, padding: Theme.spacing.md, backgroundColor: Theme.colors.surface, borderRadius: Theme.borderRadius.md },
     qrLabel: { ...Theme.typography.caption, fontWeight: 'bold', marginBottom: Theme.spacing.md, color: Theme.colors.primary },
-    qrWrapper: { padding: 10, backgroundColor: 'white', borderRadius: 8 }
+    qrWrapper: { padding: 10, backgroundColor: 'white', borderRadius: 8 },
+    recipeItemRow: { flexDirection: 'row', padding: 10, backgroundColor: Theme.colors.surface, borderRadius: Theme.borderRadius.md, marginBottom: 10, alignItems: 'center' },
+    unitToggle: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 5 },
+    unitBtn: { padding: 4, borderRadius: 4, borderWidth: 1, borderColor: Theme.colors.border },
+    unitBtnActive: { backgroundColor: Theme.colors.primary, borderColor: Theme.colors.primary },
+    unitBtnText: { fontSize: 10, color: Theme.colors.textSecondary },
+    unitBtnTextActive: { color: 'white', fontWeight: 'bold' },
+    removeBtn: { marginLeft: 10, padding: 5 },
+    addItemBtn: { padding: 10, alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: Theme.colors.primary, borderRadius: Theme.borderRadius.md, marginBottom: 15 },
+    smartFillBtn: { padding: 12, backgroundColor: '#E3F2FD', borderRadius: Theme.borderRadius.md, marginTop: 10, alignItems: 'center', borderWidth: 1, borderColor: '#2196F3' },
+    smartFillText: { color: '#1976D2', fontWeight: 'bold', fontSize: 12 }
 });

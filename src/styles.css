@@ -1,0 +1,54 @@
+/* Global styles for FarmFlow Web */
+
+:root {
+  --primary: #2E7D32;
+  --secondary: #1565C0;
+  --background: #F0F2F5;
+}
+
+/* Custom Scrollbar for Web */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #1b5e20;
+}
+
+/* Remove focus outline for non-keyboard users but keep it for accessibility */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Enhance text rendering on desktop */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--background);
+}
+
+/* Sidebar hover effects - since React Native hover is manual, 
+   we can also use CSS for some persistent states if needed */
+.sidebar-item:hover {
+  background-color: rgba(46, 125, 50, 0.1);
+}
+
+/* Smooth transitions for cards */
+.card-hover {
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}

@@ -67,7 +67,7 @@ export const useFields = () => {
             const id = uuidv4();
             await db.execute(
                 'INSERT INTO fields (id, name, acreage, last_gps_lat, last_gps_long, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                [id, name, acreage, lat || null, long || null, farmId, new Date().toISOString()]
+                [id, name, acreage, lat ?? null, long ?? null, farmId, new Date().toISOString()]
             );
             await recordAudit({
                 action: 'INSERT',
@@ -87,7 +87,7 @@ export const useFields = () => {
         try {
             await db.execute(
                 'UPDATE fields SET name = ?, acreage = ?, last_gps_lat = ?, last_gps_long = ? WHERE id = ? AND farm_id = ?',
-                [name, acreage, lat || null, long || null, id, farmId]
+                [name, acreage, lat ?? null, long ?? null, id, farmId]
             );
             await recordAudit({
                 action: 'UPDATE',

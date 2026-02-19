@@ -53,12 +53,25 @@ export const AppSchema = new Schema([
         columns: [
             new Column({ name: 'id', type: ColumnType.TEXT }),
             new Column({ name: 'name', type: ColumnType.TEXT }),
-            new Column({ name: 'product_name', type: ColumnType.TEXT }),
-            new Column({ name: 'epa_number', type: ColumnType.TEXT }),
-            new Column({ name: 'rate_per_acre', type: ColumnType.REAL }),
+            new Column({ name: 'product_name', type: ColumnType.TEXT }), // Legacy support
+            new Column({ name: 'epa_number', type: ColumnType.TEXT }),  // Legacy support
+            new Column({ name: 'rate_per_acre', type: ColumnType.REAL }), // Legacy support
             new Column({ name: 'water_rate_per_acre', type: ColumnType.REAL }),
             new Column({ name: 'phi_days', type: ColumnType.INTEGER }),
             new Column({ name: 'rei_hours', type: ColumnType.INTEGER }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
+            new Column({ name: 'created_at', type: ColumnType.TEXT }),
+        ],
+    }),
+    new Table({
+        name: 'recipe_items',
+        columns: [
+            new Column({ name: 'id', type: ColumnType.TEXT }),
+            new Column({ name: 'recipe_id', type: ColumnType.TEXT }),
+            new Column({ name: 'product_name', type: ColumnType.TEXT }),
+            new Column({ name: 'epa_number', type: ColumnType.TEXT }),
+            new Column({ name: 'rate', type: ColumnType.REAL }),
+            new Column({ name: 'unit', type: ColumnType.TEXT }), // Gal, oz, lbs, pt, qt
             new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
@@ -123,6 +136,8 @@ export const AppSchema = new Schema([
             new Column({ name: 'name', type: ColumnType.TEXT }),
             new Column({ name: 'capacity', type: ColumnType.REAL }),
             new Column({ name: 'crop_type', type: ColumnType.TEXT }),
+            new Column({ name: 'landlord_id', type: ColumnType.TEXT }),
+            new Column({ name: 'landlord_share_pct', type: ColumnType.REAL }),
             new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
@@ -156,6 +171,16 @@ export const AppSchema = new Schema([
             new Column({ name: 'delivery_deadline', type: ColumnType.TEXT }),
             new Column({ name: 'destination_name', type: ColumnType.TEXT }),
             new Column({ name: 'farm_id', type: ColumnType.TEXT }),
+            new Column({ name: 'created_at', type: ColumnType.TEXT }),
+        ],
+    }),
+    new Table({
+        name: 'farm_members',
+        columns: [
+            new Column({ name: 'id', type: ColumnType.TEXT }),
+            new Column({ name: 'user_id', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
+            new Column({ name: 'role', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
     }),

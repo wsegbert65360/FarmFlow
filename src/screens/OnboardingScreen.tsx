@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, SafeAreaView, Alert, Modal } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, SafeAreaView, Modal } from 'react-native';
+import { showAlert } from '../utils/AlertUtility';
 import { Theme } from '../constants/Theme';
 import { useSettings } from '../hooks/useSettings';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { connector } from '../db/SupabaseConnector';
+import { db } from '../db/powersync';
+import { v4 as uuidv4 } from 'uuid';
 
 export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => {
     const { saveSettings } = useSettings();
@@ -11,44 +15,84 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
     const [units, setUnits] = useState<'US' | 'Metric'>('US');
     const [mode, setMode] = useState<'NEW' | 'JOIN'>('NEW');
     const [showScanner, setShowScanner] = useState(false);
+    const [isScanning, setIsScanning] = useState(false);
+    const [manualId, setManualId] = useState('');
+    const [joiningManual, setJoiningManual] = useState(false);
     const [permission, requestPermission] = useCameraPermissions();
 
     const handleFinish = async () => {
         if (mode === 'NEW') {
             if (!farmName || !state) return;
             try {
+                const farmId = uuidv4();
+                const { data: { user } } = await connector.client.auth.getUser();
+
+                if (!user) throw new Error('User not authenticated');
+
+                // 1. Create the membership record locally
+                await db.execute(
+                    'INSERT INTO farm_members (id, user_id, farm_id, role, created_at) VALUES (?, ?, ?, ?, ?)',
+                    [uuidv4(), user.id, farmId, 'OWNER', new Date().toISOString()]
+                );
+
+                // 2. Save settings
                 await saveSettings({
                     farm_name: farmName,
                     state: state,
                     units: units,
                     onboarding_completed: true,
+                    farm_id: farmId,
                 });
+
                 onComplete();
-            } catch (error) {
-                Alert.alert('Error', 'Failed to save settings. Please try again.');
+            } catch (error: any) {
+                console.error('Registration Error:', error);
+                const msg = error.message || 'Unknown network error';
+                showAlert('Registration Failed', `Could not create farm: ${msg} \n\nCheck if your Supabase tables have a 'farm_id' column.`);
             }
         }
     };
 
     const handleScanJoin = async (data: string) => {
+        if (isScanning) return;
+        setIsScanning(true);
         try {
             const parsed = JSON.parse(data);
-            if (parsed.k && parsed.t && parsed.f) {
+            if (parsed.f) {
+                const { data: { user } } = await connector.client.auth.getUser();
+                if (!user) throw new Error('User not authenticated');
+
+                // 1. Create the membership record locally
+                await db.execute(
+                    'INSERT INTO farm_members (id, user_id, farm_id, role, created_at) VALUES (?, ?, ?, ?, ?)',
+                    [uuidv4(), user.id, parsed.f, 'WORKER', new Date().toISOString()]
+                );
+
+                // 2. Update settings
                 await saveSettings({
-                    supabase_anon_key: parsed.k,
-                    farm_join_token: parsed.t,
                     farm_id: parsed.f,
                     farm_name: parsed.n || 'Joined Farm',
                     onboarding_completed: true
                 });
+
                 setShowScanner(false);
                 onComplete();
-                Alert.alert('Success', 'Joined farm successfully!');
+                showAlert('Success', 'Joined farm successfully!');
+
+                // Trigger fallback sync for immediate data availability
+                const { SyncUtility } = require('../utils/SyncUtility');
+                if (!SyncUtility.isNativeStreamingAvailable()) {
+                    SyncUtility.pullAllFarmData(parsed.f).catch(console.error);
+                }
             } else {
-                Alert.alert('Invalid QR', 'This QR code does not contain valid farm invitation data.');
+                showAlert('Invalid QR', 'This QR code does not contain a valid farm ID.');
             }
-        } catch (e) {
-            Alert.alert('Scan Error', 'Could not parse invite token.');
+        } catch (error: any) {
+            console.error('Join failed:', error);
+            const msg = error.message || 'Unknown network error';
+            showAlert('Join Failed', `Could not join farm: ${msg} `);
+        } finally {
+            setIsScanning(false);
         }
     };
 
@@ -123,17 +167,44 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
                     </>
                 ) : (
                     <View style={styles.joinContainer}>
-                        <Text style={styles.joinHint}>Ask a farm administrator to show you their Invite Token or Sync QR from the Vault settings.</Text>
+                        <Text style={styles.joinTitle}>Connect to your Farm</Text>
+                        <Text style={styles.joinHint}>Ask a farm administrator to show you their Sync QR from the Vault on their device or PC.</Text>
+
                         <TouchableOpacity
                             style={styles.scanButton}
                             onPress={async () => {
                                 const { status } = await requestPermission();
                                 if (status === 'granted') setShowScanner(true);
-                                else Alert.alert('Permission Required', 'Camera access is needed to scan invite tokens.');
+                                else showAlert('Permission Required', 'Camera access is needed to scan invite tokens.');
                             }}
                         >
-                            <Text style={styles.scanButtonText}>Scan Visit Invitation</Text>
+                            <Text style={styles.scanButtonText}>📸 Scan QR Code</Text>
                         </TouchableOpacity>
+
+                        <View style={styles.divider}>
+                            <View style={styles.line} />
+                            <Text style={styles.dividerText}>OR</Text>
+                            <View style={styles.line} />
+                        </View>
+
+                        <View style={styles.manualGroup}>
+                            <Text style={styles.label}>Enter Farm ID Manually</Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="8-4-4-4-12 format"
+                                value={manualId}
+                                onChangeText={setManualId}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                            />
+                            <TouchableOpacity
+                                style={[styles.manualButton, !manualId && styles.disabledButton]}
+                                onPress={() => handleScanJoin(JSON.stringify({ f: manualId, n: 'Joined Farm' }))}
+                                disabled={!manualId || joiningManual}
+                            >
+                                <Text style={styles.manualButtonText}>{joiningManual ? 'Joining...' : 'Join with ID'}</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 )}
             </ScrollView>
@@ -142,8 +213,27 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
                 <SafeAreaView style={{ flex: 1, backgroundColor: 'black' }}>
                     <CameraView
                         style={StyleSheet.absoluteFill}
+                        facing="back"
+                        barcodeScannerSettings={{
+                            barcodeTypes: ['qr'],
+                        }}
                         onBarcodeScanned={(res) => handleScanJoin(res.data)}
                     />
+
+                    {/* Scanning Frame Overlay */}
+                    <View style={styles.overlay}>
+                        <View style={styles.unfocusedContainer}></View>
+                        <View style={styles.focusedContainer}>
+                            <View style={styles.focusedCornerTopLeft}></View>
+                            <View style={styles.focusedCornerTopRight}></View>
+                            <View style={styles.focusedCornerBottomLeft}></View>
+                            <View style={styles.focusedCornerBottomRight}></View>
+                        </View>
+                        <View style={styles.unfocusedContainer}>
+                            <Text style={styles.scannerHint}>Point camera at the QR code on your PC screen</Text>
+                        </View>
+                    </View>
+
                     <TouchableOpacity style={styles.closeScanner} onPress={() => setShowScanner(false)}>
                         <Text style={styles.closeScannerText}>Cancel</Text>
                     </TouchableOpacity>
@@ -174,9 +264,24 @@ const styles = StyleSheet.create({
     modeActive: { backgroundColor: Theme.colors.primary },
     modeText: { fontWeight: 'bold', color: Theme.colors.textSecondary },
     joinContainer: { alignItems: 'center', marginTop: Theme.spacing.xl, padding: Theme.spacing.xl, backgroundColor: Theme.colors.surface, borderRadius: Theme.borderRadius.lg, borderStyle: 'dashed', borderWidth: 2, borderColor: Theme.colors.border },
+    joinTitle: { ...Theme.typography.h2, marginBottom: Theme.spacing.md },
     joinHint: { textAlign: 'center', ...Theme.typography.body, color: Theme.colors.textSecondary, marginBottom: Theme.spacing.xl },
-    scanButton: { backgroundColor: Theme.colors.secondary, paddingHorizontal: Theme.spacing.xl, paddingVertical: Theme.spacing.lg, borderRadius: Theme.borderRadius.md },
-    scanButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-    closeScanner: { position: 'absolute', bottom: 40, alignSelf: 'center', backgroundColor: Theme.colors.danger, paddingHorizontal: 40, paddingVertical: 15, borderRadius: 30 },
-    closeScannerText: { color: 'white', fontWeight: 'bold' }
+    scanButton: { backgroundColor: Theme.colors.primary, paddingHorizontal: Theme.spacing.xl, paddingVertical: Theme.spacing.lg, borderRadius: Theme.borderRadius.md, width: '100%', alignItems: 'center' },
+    scanButtonText: { color: 'white', fontWeight: 'bold', fontSize: 18 },
+    divider: { flexDirection: 'row', alignItems: 'center', marginVertical: Theme.spacing.xl, width: '100%' },
+    line: { flex: 1, height: 1, backgroundColor: Theme.colors.border },
+    dividerText: { marginHorizontal: Theme.spacing.md, color: Theme.colors.textSecondary, fontWeight: 'bold' },
+    manualGroup: { width: '100%' },
+    manualButton: { backgroundColor: Theme.colors.secondary, padding: Theme.spacing.md, borderRadius: Theme.borderRadius.sm, alignItems: 'center', marginTop: Theme.spacing.md },
+    manualButtonText: { color: 'white', fontWeight: 'bold' },
+    closeScanner: { position: 'absolute', bottom: 40, alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 40, paddingVertical: 15, borderRadius: 30, borderWidth: 1, borderColor: 'white' },
+    closeScannerText: { color: 'white', fontWeight: 'bold' },
+    overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },
+    unfocusedContainer: { flex: 1, width: '100%', backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+    focusedContainer: { width: 250, height: 250, backgroundColor: 'transparent' },
+    scannerHint: { color: 'white', fontWeight: 'bold', textAlign: 'center', padding: 20 },
+    focusedCornerTopLeft: { position: 'absolute', top: 0, left: 0, width: 40, height: 40, borderTopWidth: 4, borderLeftWidth: 4, borderColor: Theme.colors.primary },
+    focusedCornerTopRight: { position: 'absolute', top: 0, right: 0, width: 40, height: 40, borderTopWidth: 4, borderRightWidth: 4, borderColor: Theme.colors.primary },
+    focusedCornerBottomLeft: { position: 'absolute', bottom: 0, left: 0, width: 40, height: 40, borderBottomWidth: 4, borderLeftWidth: 4, borderColor: Theme.colors.primary },
+    focusedCornerBottomRight: { position: 'absolute', bottom: 0, right: 0, width: 40, height: 40, borderBottomWidth: 4, borderRightWidth: 4, borderColor: Theme.colors.primary }
 });

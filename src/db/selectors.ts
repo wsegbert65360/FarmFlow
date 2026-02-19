@@ -3,7 +3,7 @@ import { Field } from '../hooks/useFields';
 import { Bin } from '../hooks/useGrain';
 import { GrainLog } from '../hooks/useGrain';
 import { InventoryItem } from '../hooks/useInventory';
-import { Landlord, LandlordShare } from '../hooks/useLandlords';
+import { Landlord, FieldSplit } from '../hooks/useLandlords';
 
 /**
  * Performance-optimized selectors for derivation logic.
@@ -43,7 +43,7 @@ export const useInventorySelectors = (inventory: InventoryItem[]) => {
     }, [inventory]);
 };
 
-export const useComplianceSelectors = (logs: GrainLog[], shares: LandlordShare[], landlords: Landlord[]) => {
+export const useComplianceSelectors = (logs: GrainLog[], shares: FieldSplit[], landlords: Landlord[]) => {
     return useMemo(() => {
         const results: Record<string, { totalBushels: number; shares: Record<string, number> }> = {};
 
@@ -57,6 +57,7 @@ export const useComplianceSelectors = (logs: GrainLog[], shares: LandlordShare[]
             // Calculate shares for this field
             const fieldShares = shares.filter(s => s.field_id === fieldId);
             fieldShares.forEach(share => {
+                // share_percentage is a decimal (e.g. 0.5 for 50%)
                 const amount = log.bushels_net * share.share_percentage;
                 results[fieldId].shares[share.landlord_id] = (results[fieldId].shares[share.landlord_id] || 0) + amount;
             });

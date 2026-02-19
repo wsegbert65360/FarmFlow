@@ -82,5 +82,25 @@ export const useLandlords = () => {
         await recordAudit({ action: 'DELETE', tableName: 'landlord_shares', recordId: id, farmId: farmId, changes: { id } });
     };
 
-    return { landlords, fieldSplits, loading, addLandlord, addFieldSplit, deleteSplit };
+    const deleteLandlord = async (id: string) => {
+        try {
+            // 1. Delete associated splits
+            await db.execute('DELETE FROM landlord_shares WHERE landlord_id = ? AND farm_id = ?', [id, farmId]);
+            // 2. Delete landlord
+            await db.execute('DELETE FROM landlords WHERE id = ? AND farm_id = ?', [id, farmId]);
+
+            await recordAudit({
+                action: 'DELETE',
+                tableName: 'landlords',
+                recordId: id,
+                farmId: farmId,
+                changes: { deleted: true }
+            });
+        } catch (e) {
+            console.error('[useLandlords] Failed to delete landlord', e);
+            throw e;
+        }
+    };
+
+    return { landlords, fieldSplits, loading, addLandlord, addFieldSplit, deleteSplit, deleteLandlord };
 };

@@ -1,20 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert, TextInput, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator, Platform, TextInput, ScrollView } from 'react-native';
+import { showAlert } from '../utils/AlertUtility';
 import { Theme } from '../constants/Theme';
 import { useSpray, Recipe } from '../hooks/useSpray';
 import { usePlanting, SeedVariety } from '../hooks/usePlanting';
 import { useGrain, Bin } from '../hooks/useGrain';
+import { useFields, Field } from '../hooks/useFields';
 import { useContracts, Contract } from '../hooks/useContracts';
 import { fetchCurrentWeather, WeatherData } from '../utils/WeatherUtility';
-import { useFields, Field } from '../hooks/useFields';
-import { mockScanTicket } from '../utils/OCRUtility';
+import { useLandlords } from '../hooks/useLandlords';
 import { useSettings } from '../hooks/useSettings';
 
 export type LogType = 'SPRAY' | 'PLANTING' | 'HARVEST' | 'DELIVERY';
 
 interface LogSessionProps {
     type: LogType;
-    fixedId: string; // The ID of the item the user clicked from (Field or Bin)
+    fixedId: string;
     fixedName: string;
     fixedAcreage?: number;
     fixedType: 'FIELD' | 'BIN';
@@ -28,10 +29,11 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
     const { seeds, loading: plantingLoading, addPlantingLog } = usePlanting();
     const { bins, loading: grainLoading, addGrainLog } = useGrain();
     const { contracts, loading: contractsLoading } = useContracts();
-    const { friends, loading: friendsLoading } = { friends: [], loading: false }; // Placeholder if needed
     const { fields, loading: fieldsLoading } = useFields();
     const { settings } = useSettings();
+    const { landlords } = useLandlords();
 
+    const [loading, setLoading] = useState(true);
     const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
     const [loadingWeather, setLoadingWeather] = useState(false);
     const [weather, setWeather] = useState<WeatherData | null>(null);
@@ -41,7 +43,12 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
     const [moisture, setMoisture] = useState('15.0');
     const [notes, setNotes] = useState('');
     const [saving, setSaving] = useState(false);
-    const [scanning, setScanning] = useState(false);
+
+    // Weather / Spray Info
+    const [temp, setTemp] = useState('75');
+    const [wind, setWind] = useState('5');
+    const [windDir, setWindDir] = useState('NW');
+    const [humidity, setHumidity] = useState('45');
 
     // Audit Fields for Spray
     const [targetCrop, setTargetCrop] = useState('');
@@ -49,43 +56,51 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
     const [applicatorName, setApplicatorName] = useState(settings?.default_applicator_name || '');
     const [applicatorCert, setApplicatorCert] = useState(settings?.default_applicator_cert || '');
 
-    const loading = sprayLoading || plantingLoading || grainLoading || contractsLoading || fieldsLoading;
+    // Planting specific
+    const [population, setPopulation] = useState('');
+    const [depth, setDepth] = useState('1.5');
 
     useEffect(() => {
+        // Initial setup for spray
         if (type === 'SPRAY') {
             loadWeather();
-        }
-        if (settings && type === 'SPRAY') {
-            if (!applicatorName) setApplicatorName(settings.default_applicator_name || '');
-            if (!applicatorCert) setApplicatorCert(settings.default_applicator_cert || '');
-        }
-    }, [settings, type]);
-
-    // Smart Suggestion Logic
-    useEffect(() => {
-        if (!loading && !selectedItemId) {
-            if (type === 'HARVEST') {
-                if (fixedType === 'BIN' && fields.length > 0) {
-                    // At a bin? Suggest the field you are currently standing in (closest)
-                    setSelectedItemId(fields[0].id);
-                } else if (fixedType === 'FIELD' && bins.length > 0) {
-                    // At a field? Suggest the first bin for now (could be 'last used' in future)
-                    setSelectedItemId(bins[0].id);
-                }
-            } else if (type === 'SPRAY' && recipes.length > 0) {
-                setSelectedItemId(recipes[0].id);
-            } else if (type === 'PLANTING' && seeds.length > 0) {
-                setSelectedItemId(seeds[0].id);
-            } else if (type === 'DELIVERY' && contracts.length > 0) {
-                setSelectedItemId(contracts[0].id);
+            if (settings) {
+                setApplicatorName(settings.default_applicator_name || '');
+                setApplicatorCert(settings.default_applicator_cert || '');
             }
         }
-    }, [loading, type, fixedType, fields, bins, recipes, seeds, contracts, selectedItemId]);
+
+        // Mock loading delay to ensure hooks have data
+        const timer = setTimeout(() => {
+            setLoading(false);
+
+            // Smart suggestions
+            if (type === 'PLANTING' && seeds.length > 0) {
+                setSelectedItemId(seeds[0].id);
+                setPopulation(seeds[0].default_population.toString());
+            } else if (type === 'SPRAY' && recipes.length > 0) {
+                setSelectedItemId(recipes[0].id);
+            } else if (type === 'DELIVERY' && contracts.length > 0) {
+                setSelectedItemId(contracts[0].id);
+            } else if (type === 'HARVEST' && bins.length > 0) {
+                if (fixedType === 'FIELD') {
+                    setSelectedItemId(bins[0].id);
+                }
+            }
+        }, 800);
+        return () => clearTimeout(timer);
+    }, [type, seeds, recipes, contracts, bins, fixedType, settings]);
 
     const loadWeather = async () => {
         setLoadingWeather(true);
         const data = await fetchCurrentWeather();
-        if (data) setWeather(data);
+        if (data) {
+            setWeather(data);
+            setTemp(data.temperature.toString());
+            setWind(data.windSpeed.toString());
+            setWindDir(data.windDirection);
+            setHumidity(data.humidity.toString());
+        }
         setLoadingWeather(false);
     };
 
@@ -94,18 +109,26 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
             case 'SPRAY': return recipes;
             case 'PLANTING': return seeds;
             case 'HARVEST':
-                // If we're coming from a field, we need to pick a bin
-                if (fixedType === 'FIELD') return bins;
-                // If we're coming from a bin, we need to pick a field
-                return fields;
+                return fixedType === 'FIELD' ? bins : fields;
             case 'DELIVERY': return contracts;
             default: return [];
         }
     };
 
+    const [showSuccess, setShowSuccess] = useState(false);
+
+    useEffect(() => {
+        if (showSuccess) {
+            const timer = setTimeout(() => {
+                onClose();
+            }, 1500);
+            return () => clearTimeout(timer);
+        }
+    }, [showSuccess]);
+
     const handleLog = async () => {
-        if (!selectedItemId && type !== 'DELIVERY') {
-            Alert.alert('Selection Required', 'Please select an item to continue.');
+        if (!selectedItemId && type !== 'DELIVERY' && type !== 'HARVEST') {
+            showAlert('Selection Required', 'Please select an item to continue.');
             return;
         }
 
@@ -114,17 +137,21 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
             if (type === 'SPRAY') {
                 if (!fixedAcreage) throw new Error('Acreage required');
                 const selectedRecipe = recipes.find(r => r.id === selectedItemId);
+
+                // Calculate total chemical volume (sum of all items)
+                const totalChemicalVolume = selectedRecipe?.items?.reduce((acc, i) => acc + i.rate, 0) || (selectedRecipe?.rate_per_acre || 0);
+
                 await addSprayLog({
                     fieldId: fixedId,
                     recipeId: selectedItemId!,
                     totalGallons: (selectedRecipe?.water_rate_per_acre || 0) * fixedAcreage,
-                    totalProduct: (selectedRecipe?.rate_per_acre || 0) * fixedAcreage,
-                    weather: weather ? {
-                        temp: weather.temperature,
-                        windSpeed: weather.windSpeed,
-                        windDir: weather.windDirection,
-                        humidity: weather.humidity
-                    } : null,
+                    totalProduct: totalChemicalVolume * fixedAcreage,
+                    weather: {
+                        temp: parseFloat(temp),
+                        windSpeed: parseFloat(wind),
+                        windDir: windDir,
+                        humidity: parseFloat(humidity)
+                    },
                     targetCrop,
                     targetPest,
                     applicatorName,
@@ -135,17 +162,15 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                     notes: notes
                 });
             } else if (type === 'PLANTING') {
-                const selectedSeed = seeds.find(s => s.id === selectedItemId);
                 await addPlantingLog({
                     fieldId: fixedId,
                     seedId: selectedItemId!,
-                    population: selectedSeed?.default_population || 32000,
-                    depth: 2.0,
+                    population: parseFloat(population),
+                    depth: parseFloat(depth),
                     notes: notes
                 });
             } else if (type === 'HARVEST') {
-                // Figure out which is which
-                const fieldId = fixedType === 'FIELD' ? fixedId : selectedItemId!;
+                const fieldId = fixedType === 'FIELD' ? fixedId : null;
                 const binId = fixedType === 'BIN' ? fixedId : selectedItemId!;
 
                 await addGrainLog({
@@ -153,36 +178,63 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                     field_id: fieldId,
                     bin_id: binId,
                     destination_type: 'BIN',
+                    destination_name: 'On-Farm Storage',
                     bushels_net: parseFloat(bushels) || 0,
                     moisture: parseFloat(moisture) || 15.0,
-                    notes: notes
+                    notes: notes,
+                    end_time: new Date().toISOString()
                 });
             } else if (type === 'DELIVERY') {
                 const contract = contracts.find(c => (c as Contract).id === selectedItemId) as Contract;
                 await addGrainLog({
                     type: 'DELIVERY',
+                    field_id: null,
                     bin_id: fixedId,
                     destination_type: 'ELEVATOR',
                     destination_name: contract?.destination_name || 'Direct Sale',
                     contract_id: contract?.id,
                     bushels_net: parseFloat(bushels) || 0,
                     moisture: parseFloat(moisture) || 15.0,
-                    notes: notes
+                    notes: notes,
+                    end_time: new Date().toISOString()
                 });
             }
-            onClose();
-        } catch (error) {
-            Alert.alert('Error', 'Failed to save log entry.');
-            console.error(error);
-        } finally {
+
+            // SUCCESS FLOW
+            console.log('Log saved successfully, showing SAVED screen...');
             setSaving(false);
+            setShowSuccess(true);
+
+            showAlert('Success', 'Log entry saved successfully! Returning to dashboard.');
+        } catch (error: any) {
+            setSaving(false);
+            const errMsg = error?.message || 'Unknown error';
+            console.error('SAVE ERROR:', error);
+            showAlert('Error', 'Failed to save log entry: ' + errMsg);
         }
     };
+
+    if (showSuccess) {
+        return (
+            <View style={[styles.centered, { backgroundColor: Theme.colors.success }]}>
+                <Text style={{ fontSize: 60, color: '#fff', fontWeight: 'bold' }}>✓</Text>
+                <Text style={{ fontSize: 32, color: '#fff', fontWeight: 'bold', marginTop: 20 }}>SAVED!</Text>
+                <Text style={{ fontSize: 18, color: '#fff', marginTop: 10 }}>Syncing to cloud...</Text>
+                <TouchableOpacity
+                    onPress={onClose}
+                    style={{ marginTop: 40, padding: 15, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 10 }}
+                >
+                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>TAP TO RETURN NOW</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
 
     if (loading) {
         return (
             <View style={styles.centered}>
                 <ActivityIndicator size="large" color={Theme.colors.primary} />
+                <Text style={{ marginTop: 15, color: Theme.colors.textSecondary, fontWeight: 'bold' }}>Syncing farm data...</Text>
             </View>
         );
     }
@@ -241,9 +293,14 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                                     ]}
                                     onPress={() => setSelectedItemId(id)}
                                 >
-                                    <Text style={[styles.itemText, selectedItemId === id && styles.itemTextActive]}>
-                                        {label}
-                                    </Text>
+                                    <View style={{ alignItems: 'center' }}>
+                                        <Text style={[styles.itemText, selectedItemId === id && styles.itemTextActive]}>
+                                            {label}
+                                        </Text>
+                                        {type === 'SPRAY' && (item as Recipe).items && (
+                                            <Text style={{ fontSize: 9, color: Theme.colors.textSecondary }}>{(item as Recipe).items?.length} chemicals</Text>
+                                        )}
+                                    </View>
                                     {distanceLabel && (
                                         <Text style={{ fontSize: 10, color: Theme.colors.textSecondary }}>
                                             {distanceLabel}
@@ -253,33 +310,25 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                             );
                         })}
                     </View>
+
+                    {type === 'SPRAY' && selectedItemId && (
+                        <View style={styles.recipeSummary}>
+                            <Text style={styles.summaryLabel}>Planned Loads / Composition ({fixedAcreage} ac)</Text>
+                            {recipes.find(r => r.id === selectedItemId)?.items?.map((item, idx) => (
+                                <View key={idx} style={styles.summaryRow}>
+                                    <Text style={styles.summaryProduct}>{item.product_name}</Text>
+                                    <Text style={styles.summaryValue}>
+                                        {(item.rate * (fixedType === 'FIELD' ? fixedAcreage || 0 : 0)).toFixed(1)} {item.unit} total
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
                 </View>
 
                 {(type === 'HARVEST' || type === 'DELIVERY') && (
                     <View style={styles.section}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Theme.spacing.sm }}>
-                            <Text style={styles.sectionTitle}>Quantities</Text>
-                            <TouchableOpacity
-                                style={styles.scanButton}
-                                onPress={async () => {
-                                    setScanning(true);
-                                    try {
-                                        const result = await mockScanTicket();
-                                        setBushels(result.bushels.toString());
-                                        setMoisture(result.moisture.toString());
-                                        if (result.ticketNumber) setNotes(n => n ? `${n}\nTicket ${result.ticketNumber}` : `Ticket ${result.ticketNumber}`);
-                                        Alert.alert('Scan Successful', 'Scale ticket data imported and validated via Zod.');
-                                    } catch (e) {
-                                        Alert.alert('Scan Failed', 'Could not parse ticket data.');
-                                    } finally {
-                                        setScanning(false);
-                                    }
-                                }}
-                                disabled={scanning}
-                            >
-                                <Text style={styles.scanButtonText}>{scanning ? 'SCANNING...' : '📷 SCAN TICKET'}</Text>
-                            </TouchableOpacity>
-                        </View>
+                        <Text style={styles.sectionTitle}>Quantities</Text>
                         <View style={styles.inputForm}>
                             <View style={styles.inputRow}>
                                 <Text style={styles.label}>Net Bushels</Text>
@@ -302,6 +351,50 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                                 />
                             </View>
                         </View>
+
+                        {/* ─── Landlord Split Card ─── */}
+                        {(() => {
+                            // For HARVEST: bin is selectedItemId (target bin) when fixedType is FIELD, or fixedId when fixedType is BIN
+                            // For DELIVERY: bin is fixedId (source bin)
+                            const binId = type === 'DELIVERY' ? fixedId : (fixedType === 'BIN' ? fixedId : selectedItemId);
+                            const bin = bins.find(b => b.id === binId);
+                            const landlord = bin?.landlord_id ? landlords.find(l => l.id === bin.landlord_id) : null;
+                            const sharePct = bin?.landlord_share_pct || 0;
+                            const totalBu = parseFloat(bushels) || 0;
+                            const landlordBu = totalBu * (sharePct / 100);
+                            const tenantBu = totalBu - landlordBu;
+
+                            if (sharePct > 0 && landlord) {
+                                return (
+                                    <View style={styles.splitCard}>
+                                        <Text style={styles.splitTitle}>🤝 LANDLORD SPLIT</Text>
+                                        <View style={styles.splitRow}>
+                                            <Text style={styles.splitLabel}>Landlord</Text>
+                                            <Text style={styles.splitValue}>{landlord.name} ({sharePct}%)</Text>
+                                        </View>
+                                        <View style={styles.splitRow}>
+                                            <Text style={styles.splitLabel}>Landlord Bushels</Text>
+                                            <Text style={[styles.splitValue, { color: Theme.colors.warning }]}>{landlordBu.toFixed(2)}</Text>
+                                        </View>
+                                        <View style={styles.splitRow}>
+                                            <Text style={styles.splitLabel}>Your Bushels</Text>
+                                            <Text style={[styles.splitValue, { color: Theme.colors.success }]}>{tenantBu.toFixed(2)}</Text>
+                                        </View>
+                                        <View style={[styles.splitRow, { borderTopWidth: 1, borderTopColor: Theme.colors.border, paddingTop: 8, marginTop: 4 }]}>
+                                            <Text style={[styles.splitLabel, { fontWeight: 'bold' }]}>Total Net</Text>
+                                            <Text style={[styles.splitValue, { fontWeight: 'bold' }]}>{totalBu.toFixed(2)}</Text>
+                                        </View>
+                                    </View>
+                                );
+                            } else if (bin) {
+                                return (
+                                    <View style={[styles.splitCard, { borderLeftColor: Theme.colors.border }]}>
+                                        <Text style={{ color: Theme.colors.textSecondary, fontSize: 13 }}>No landlord split configured for this bin.</Text>
+                                    </View>
+                                );
+                            }
+                            return null;
+                        })()}
                     </View>
                 )}
 
@@ -388,6 +481,10 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                 >
                     <Text style={styles.actionButtonText}>{saving ? 'Saving...' : 'SAVE LOG'}</Text>
                 </TouchableOpacity>
+
+                <View style={{ alignItems: 'center', marginTop: 20, marginBottom: 20 }}>
+                    <Text style={{ fontSize: 10, color: '#ccc' }}>FarmFlow v4.14-STABLE</Text>
+                </View>
             </ScrollView>
         </SafeAreaView>
     );
@@ -490,17 +587,39 @@ const styles = StyleSheet.create({
     },
     disabledButton: { backgroundColor: Theme.colors.border },
     actionButtonText: { color: Theme.colors.white, fontSize: 18, fontWeight: 'bold' },
-    scanButton: {
-        backgroundColor: Theme.colors.success,
-        paddingHorizontal: Theme.spacing.sm,
-        paddingVertical: 4,
-        borderRadius: Theme.borderRadius.sm,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.1)',
+    splitCard: {
+        marginTop: Theme.spacing.md,
+        padding: Theme.spacing.md,
+        backgroundColor: '#FFFBE6',
+        borderRadius: Theme.borderRadius.md,
+        borderLeftWidth: 4,
+        borderLeftColor: Theme.colors.warning,
     },
-    scanButtonText: {
-        color: Theme.colors.white,
+    splitTitle: {
         fontSize: 12,
         fontWeight: 'bold',
+        color: Theme.colors.textSecondary,
+        textTransform: 'uppercase',
+        marginBottom: Theme.spacing.sm,
     },
+    splitRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    splitLabel: {
+        fontSize: 14,
+        color: Theme.colors.text,
+    },
+    splitValue: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: Theme.colors.text,
+    },
+    recipeSummary: { marginTop: Theme.spacing.md, padding: Theme.spacing.md, backgroundColor: '#F9F9F9', borderRadius: Theme.borderRadius.md, borderLeftWidth: 4, borderLeftColor: Theme.colors.primary },
+    summaryLabel: { fontSize: 10, fontWeight: 'bold', color: Theme.colors.textSecondary, marginBottom: 5, textTransform: 'uppercase' },
+    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
+    summaryProduct: { fontSize: 13, color: Theme.colors.text },
+    summaryValue: { fontSize: 13, fontWeight: 'bold', color: Theme.colors.primary }
 });

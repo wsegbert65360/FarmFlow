@@ -92,14 +92,23 @@ export const usePlanting = () => {
                 const productName = `${seed.brand} ${seed.variety_name}`;
                 const totalUsage = (params.population * acreage) / 80000;
 
-                const invResult = await db.execute('SELECT quantity_on_hand FROM inventory WHERE product_name = ? AND farm_id = ?', [productName, farmId]);
-                const currentQty = invResult.rows?._array[0]?.quantity_on_hand || 0;
-                const newQty = currentQty - totalUsage;
+                const invResult = await db.execute('SELECT id, quantity_on_hand FROM inventory WHERE product_name = ? AND farm_id = ?', [productName, farmId]);
+                const existing = invResult.rows?._array[0];
 
-                await db.execute(
-                    'INSERT OR REPLACE INTO inventory (id, product_name, quantity_on_hand, unit, farm_id) VALUES ((SELECT id FROM inventory WHERE product_name = ? AND farm_id = ?), ?, ?, ?, ?)',
-                    [productName, farmId, productName, newQty, 'Units', farmId]
-                );
+                if (existing) {
+                    const newQty = (existing.quantity_on_hand || 0) - totalUsage;
+                    await db.execute(
+                        'UPDATE inventory SET quantity_on_hand = ? WHERE id = ?',
+                        [newQty, existing.id]
+                    );
+                } else {
+                    const newId = uuidv4();
+                    const newQty = -totalUsage;
+                    await db.execute(
+                        'INSERT INTO inventory (id, product_name, quantity_on_hand, unit, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+                        [newId, productName, newQty, 'Units', farmId, new Date().toISOString()]
+                    );
+                }
             }
 
             await recordAudit({
@@ -139,6 +148,11 @@ export const usePlanting = () => {
         await recordAudit({ action: 'DELETE', tableName: 'seed_varieties', recordId: id, farmId: farmId, changes: { id } });
     };
 
+    const deletePlantingLog = async (id: string) => {
+        await db.execute('DELETE FROM planting_logs WHERE id = ? AND farm_id = ?', [id, farmId]);
+        await recordAudit({ action: 'DELETE', tableName: 'planting_logs', recordId: id, farmId: farmId, changes: { id } });
+    };
+
     return {
         seeds,
         plantingLogs,
@@ -146,6 +160,7 @@ export const usePlanting = () => {
         addPlantingLog,
         addSeed,
         updateSeed,
-        deleteSeed
+        deleteSeed,
+        deletePlantingLog
     };
 };

@@ -10,8 +10,6 @@ export interface Settings {
     default_applicator_name?: string;
     default_applicator_cert?: string;
     farm_id: string;
-    supabase_anon_key?: string;
-    farm_join_token?: string;
 }
 
 export const useSettings = () => {
@@ -36,8 +34,6 @@ export const useSettings = () => {
                             onboarding_completed: Boolean(row.onboarding_completed),
                             default_applicator_name: row.default_applicator_name || '',
                             default_applicator_cert: row.default_applicator_cert || '',
-                            supabase_anon_key: row.supabase_anon_key || '',
-                            farm_join_token: row.farm_join_token || '',
                             farm_id: row.farm_id || '',
                         });
                     }
@@ -59,7 +55,7 @@ export const useSettings = () => {
             const current = settings || {
                 farm_name: '',
                 state: '',
-                units: 'Metric', // Default to Metric if unknown
+                units: 'US', // Default to US for this application
                 onboarding_completed: false,
                 farm_id: uuidv4(),
                 default_applicator_name: '',
@@ -71,8 +67,8 @@ export const useSettings = () => {
             const merged = { ...current, ...updated };
 
             await db.execute(
-                `INSERT OR REPLACE INTO settings (id, farm_name, state, units, onboarding_completed, default_applicator_name, default_applicator_cert, farm_id, supabase_anon_key, farm_join_token, updated_at) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT OR REPLACE INTO settings (id, farm_name, state, units, onboarding_completed, default_applicator_name, default_applicator_cert, farm_id, updated_at) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     'farm_config',
                     merged.farm_name,
@@ -82,8 +78,6 @@ export const useSettings = () => {
                     merged.default_applicator_name,
                     merged.default_applicator_cert,
                     merged.farm_id,
-                    merged.supabase_anon_key,
-                    merged.farm_join_token,
                     new Date().toISOString(),
                 ]
             );

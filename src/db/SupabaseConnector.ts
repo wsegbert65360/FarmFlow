@@ -3,9 +3,9 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 
-// TODO: Replace with your actual Supabase credentials
+// Production Supabase Credentials
 const SUPABASE_URL = 'https://skkbmmxjclpbbijcrgyi.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
+const SUPABASE_ANON_KEY = 'sb_publishable_CTRPsiYo2fZ5wiA9yUG6kA_krlOpMSi';
 
 export class SupabaseConnector implements PowerSyncBackendConnector {
     client: SupabaseClient;
@@ -14,50 +14,18 @@ export class SupabaseConnector implements PowerSyncBackendConnector {
         this.client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     }
 
-    async getDynamicKey(): Promise<string | null> {
-        try {
-            // We use the shared db instance. Since PowerSync might not be fully 
-            // initialized yet when this is first called, we've carefully placed this 
-            // inside fetchCredentials which is called on-demand.
-            const { db } = await import('./powersync');
-            const result = await db.execute('SELECT supabase_anon_key, farm_join_token FROM settings WHERE id = ?', ['farm_config']);
-            return result.rows?._array[0]?.supabase_anon_key || null;
-        } catch (e) {
-            console.error('[SupabaseConnector] Failed to fetch dynamic key:', e);
-            return null;
-        }
-    }
-
-    async updateClient() {
-        const dynamicKey = await this.getDynamicKey();
-        const activeKey = dynamicKey || SUPABASE_ANON_KEY;
-
-        // Update client only if necessary or just always to be safe
-        this.client = createClient(SUPABASE_URL, activeKey);
+    async ensureInitialized() {
+        // No-op for hardcoded config
+        return Promise.resolve();
     }
 
     async fetchCredentials() {
-        await this.updateClient();
-
-        const { db } = await import('./powersync');
-        const settingsRes = await db.execute('SELECT farm_join_token, farm_id FROM settings WHERE id = ?', ['farm_config']);
-        const row = settingsRes.rows?._array[0];
-        const joinToken = row?.farm_join_token;
-
-        // If no join token and not the primary development project, assume local-only
-        if (!joinToken && !SUPABASE_URL.includes('skkbmmxjclpbbijcrgy')) {
-            return null;
-        }
-
+        await this.ensureInitialized();
         const { data: { session }, error } = await this.client.auth.getSession();
 
         if (error || !session) {
-            // In a production app, we might trigger a sign-in or use the joinToken 
-            // to exchange for a temporary session. For now, fallback to joinToken if available.
-            return {
-                endpoint: SUPABASE_URL,
-                token: joinToken || '',
-            };
+            console.warn('[SupabaseConnector] No active session found.');
+            return null;
         }
 
         return {
@@ -67,7 +35,6 @@ export class SupabaseConnector implements PowerSyncBackendConnector {
     }
 
     async uploadData(database: AbstractPowerSyncDatabase): Promise<void> {
-        await this.updateClient();
         const batch = await database.getCrudBatch();
         if (!batch) return;
 
@@ -106,7 +73,6 @@ export class SupabaseConnector implements PowerSyncBackendConnector {
     }
 
     async uploadFile(bucket: string, path: string, localPath: string): Promise<string> {
-        await this.updateClient();
         if (SUPABASE_URL.includes('YOUR_PROJECT_ID')) {
             console.warn('[SupabaseConnector] Skipping file upload due to placeholder credentials.');
             return `mock-url://${bucket}/${path}`;

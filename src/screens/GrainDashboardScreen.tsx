@@ -1,22 +1,31 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { StyleSheet, Text, View, FlatList, SafeAreaView, ScrollView, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { StyleSheet, Text, View, FlatList, SafeAreaView, ScrollView, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, Platform, Keyboard, useWindowDimensions } from 'react-native';
+import { showAlert, showConfirm, showDeleteConfirm } from '../utils/AlertUtility';
 import { Theme } from '../constants/Theme';
 import { useGrain, Bin } from '../hooks/useGrain';
 import { useContracts, Contract } from '../hooks/useContracts';
+import { useLandlords, Landlord } from '../hooks/useLandlords';
 
 interface GrainDashboardProps {
     onSelectAction: (id: string, name: string, type: 'HARVEST' | 'DELIVERY') => void;
 }
 
 export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) => {
-    const { bins, loading: grainLoading, addBin: createBin, updateBin, deleteBin } = useGrain();
+    const { bins, loading: grainLoading, addBin: createBin, updateBin, deleteBin, addGrainLog } = useGrain();
     const { contracts, loading: contractLoading, addContract: createContract, updateContract, deleteContract } = useContracts();
+    const { landlords } = useLandlords();
+    const { width } = useWindowDimensions();
+
+    const isDesktop = width > 768;
+    const numColumns = isDesktop ? (width > 1200 ? 3 : 2) : 1;
 
     // UI State
     const [binModalVisible, setBinModalVisible] = useState(false);
     const [contractModalVisible, setContractModalVisible] = useState(false);
     const [editingItem, setEditingItem] = useState<any>(null); // Bin or Contract
     const [saving, setSaving] = useState(false);
+    const [quickEditBinId, setQuickEditBinId] = useState<string | null>(null);
+    const [quickEditValue, setQuickEditValue] = useState('');
 
     // Alert Logic
     const alerts = useMemo(() => {
@@ -29,7 +38,6 @@ export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) =>
             const delivered = c.delivered_bushels || 0;
             const deadlineDate = c.delivery_deadline ? new Date(c.delivery_deadline) : null;
 
-            // 1. Delivery Deadlines
             if (deadlineDate) {
                 if (deadlineDate < now && delivered < c.total_bushels) {
                     items.push({ id: `deadline-crit-${c.id}`, type: 'CRITICAL', message: `Deadline passed for ${c.destination_name}!` });
@@ -38,7 +46,6 @@ export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) =>
                 }
             }
 
-            // 2. Fulfillment Logic
             if (delivered > c.total_bushels) {
                 items.push({ id: `over-${c.id}`, type: 'CRITICAL', message: `Over-delivered to ${c.destination_name} (+${(delivered - c.total_bushels).toLocaleString()} bu)` });
             } else if (delivered > c.total_bushels * 0.9 && delivered < c.total_bushels) {
@@ -53,6 +60,8 @@ export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) =>
     const [name, setName] = useState('');
     const [capacity, setCapacity] = useState('');
     const [cropType, setCropType] = useState('Corn');
+    const [selectedLandlordId, setSelectedLandlordId] = useState<string | null>(null);
+    const [sharePct, setSharePct] = useState('');
 
     // Form State - Contract
     const [destination, setDestination] = useState('');
@@ -67,31 +76,32 @@ export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) =>
             setName(bin.name);
             setCapacity(bin.capacity?.toString() || '');
             setCropType(bin.crop_type || 'Corn');
+            setSelectedLandlordId(bin.landlord_id || null);
+            setSharePct(bin.landlord_share_pct ? bin.landlord_share_pct.toString() : '');
         } else {
             setEditingItem(null);
             setName('');
             setCapacity('');
             setCropType('Corn');
+            setSelectedLandlordId(null);
+            setSharePct('');
         }
         setBinModalVisible(true);
     }, []);
 
     const saveBin = async () => {
-        if (!name) return Alert.alert('Error', 'Name is required');
+        if (!name) return showAlert('Error', 'Name is required');
         Keyboard.dismiss();
         setSaving(true);
-        console.log('SaveBin clicked', { name, capacity, cropType, editing: !!editingItem });
         try {
             if (editingItem) {
-                await updateBin(editingItem.id, name, parseFloat(capacity) || 0, cropType);
+                await updateBin(editingItem.id, name, parseFloat(capacity) || 0, cropType, selectedLandlordId, parseFloat(sharePct) || null);
             } else {
-                await createBin(name, parseFloat(capacity) || 0, cropType);
+                await createBin(name, parseFloat(capacity) || 0, cropType, selectedLandlordId, parseFloat(sharePct) || null);
             }
-            console.log('SaveBin success');
             setBinModalVisible(false);
         } catch (e: any) {
-            console.error('SaveBin failed', e);
-            Alert.alert('Error', `Failed to save bin: ${e?.message || 'Unknown error'}`);
+            showAlert('Error', `Failed to save bin: ${e?.message || 'Unknown error'}`);
         } finally {
             setSaving(false);
         }
@@ -99,17 +109,48 @@ export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) =>
 
     const deleteCurrentBin = async () => {
         if (!editingItem) return;
-        Alert.alert('Delete Bin', 'Are you sure? This cannot be undone.', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Delete', style: 'destructive', onPress: async () => {
-                    setSaving(true);
-                    await deleteBin(editingItem.id);
-                    setSaving(false);
-                    setBinModalVisible(false);
-                }
+        showDeleteConfirm('this grain bin', async () => {
+            const activeBin = editingItem as Bin;
+            if (activeBin) {
+                setSaving(true);
+                await deleteBin(activeBin.id);
+                setSaving(false);
+                setBinModalVisible(false);
             }
-        ]);
+        });
+    };
+
+    const saveQuickEdit = async (bin: Bin) => {
+        const newVal = parseFloat(quickEditValue);
+        if (isNaN(newVal)) {
+            setQuickEditBinId(null);
+            return;
+        }
+
+        const currentVal = bin.current_level || 0;
+        const diff = newVal - currentVal;
+
+        if (Math.abs(diff) < 0.1) {
+            setQuickEditBinId(null);
+            return;
+        }
+
+        try {
+            // Add an adjustment log to modify the level
+            await addGrainLog({
+                bin_id: bin.id,
+                field_id: 'MANUAL_ADJUST',
+                bushels_net: diff,
+                moisture: 15.0,
+                end_time: new Date().toISOString(),
+                type: 'ADJUSTMENT',
+                destination_type: 'BIN',
+                destination_name: bin.name
+            });
+            setQuickEditBinId(null);
+        } catch (e) {
+            showAlert('Error', 'Failed to update bin level.');
+        }
     };
 
     const openContractModal = useCallback((c?: Contract) => {
@@ -132,10 +173,9 @@ export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) =>
     }, []);
 
     const saveContract = async () => {
-        if (!destination || !totalBushels) return Alert.alert('Error', 'Destination and Total Bushels are required');
+        if (!destination || !totalBushels) return showAlert('Error', 'Required fields missing');
         Keyboard.dismiss();
         setSaving(true);
-        console.log('SaveContract clicked', { destination, commodity, totalBushels, editing: !!editingItem });
         try {
             const contractData = {
                 destination_name: destination,
@@ -148,13 +188,11 @@ export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) =>
             if (editingItem) {
                 await updateContract(editingItem.id, contractData);
             } else {
-                await createContract(contractData as any);
+                await createContract(contractData as any); // Cast to any because contractData is Omit<Contract, "id">
             }
-            console.log('SaveContract success');
             setContractModalVisible(false);
         } catch (e: any) {
-            console.error('SaveContract failed', e);
-            Alert.alert('Error', `Failed to save contract: ${e?.message || 'Unknown error'}`);
+            showAlert('Error', `Failed to save contract`);
         } finally {
             setSaving(false);
         }
@@ -162,27 +200,35 @@ export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) =>
 
     const deleteCurrentContract = async () => {
         if (!editingItem) return;
-        Alert.alert('Delete Contract', 'Are you sure?', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Delete', style: 'destructive', onPress: async () => {
-                    setSaving(true);
-                    await deleteContract(editingItem.id);
-                    setSaving(false);
-                    setContractModalVisible(false);
-                }
+        showDeleteConfirm('this contract', async () => {
+            const activeContract = editingItem as Contract;
+            if (activeContract) {
+                setSaving(true);
+                await deleteContract(activeContract.id);
+                setSaving(false);
+                setContractModalVisible(false);
             }
-        ]);
+        });
     };
 
     const renderBin = useCallback(({ item }: { item: Bin }) => {
         const fullness = item.capacity ? (item.current_level || 0) / item.capacity : 0;
+        const isQuickEditing = quickEditBinId === item.id;
 
         return (
-            <TouchableOpacity onPress={() => openBinModal(item)} style={styles.card}>
+            <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => !isQuickEditing && openBinModal(item)}
+                style={[styles.card, isDesktop && { flex: 1 / numColumns - 0.05 }]}
+            >
                 <View style={styles.cardHeader}>
-                    <Text style={styles.cardTitle}>{item.name}</Text>
-                    <Text style={styles.cardSubtitle}>{item.crop_type}</Text>
+                    <View>
+                        <Text style={styles.cardTitle}>{item.name}</Text>
+                        <Text style={styles.cardSubtitle}>{item.crop_type}</Text>
+                    </View>
+                    <View style={styles.statusBadge}>
+                        <Text style={styles.statusBadgeText}>{(fullness * 100).toFixed(0)}%</Text>
+                    </View>
                 </View>
 
                 <View style={styles.progressContainer}>
@@ -190,8 +236,36 @@ export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) =>
                 </View>
 
                 <View style={styles.statsRow}>
-                    <Text style={styles.statLabel}>Current: <Text style={styles.statValue}>{item.current_level?.toLocaleString()} bu</Text></Text>
-                    <Text style={styles.statLabel}>Capacity: <Text style={styles.statValue}>{item.capacity?.toLocaleString()} bu</Text></Text>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.statLabel}>Current Level</Text>
+                        {isQuickEditing ? (
+                            <TextInput
+                                style={styles.quickInput}
+                                value={quickEditValue}
+                                onChangeText={setQuickEditValue}
+                                keyboardType="numeric"
+                                autoFocus
+                                onBlur={() => saveQuickEdit(item)}
+                                onSubmitEditing={() => saveQuickEdit(item)}
+                            />
+                        ) : (
+                            <TouchableOpacity
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    setQuickEditBinId(item.id);
+                                    setQuickEditValue(item.current_level?.toString() || '0');
+                                }}
+                            >
+                                <Text style={[styles.statValue, { fontSize: 18, color: Theme.colors.primary }]}>
+                                    {item.current_level?.toLocaleString()} bu ✎
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.statLabel}>Capacity</Text>
+                        <Text style={styles.statValue}>{item.capacity?.toLocaleString()} bu</Text>
+                    </View>
                 </View>
 
                 <View style={styles.cardActions}>
@@ -211,16 +285,21 @@ export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) =>
                 </View>
             </TouchableOpacity>
         );
-    }, [openBinModal, onSelectAction]);
+    }, [openBinModal, onSelectAction, quickEditBinId, quickEditValue, isDesktop, numColumns]);
 
     const renderContract = useCallback(({ item }: { item: Contract }) => {
         const progress = (item.delivered_bushels || 0) / item.total_bushels;
 
         return (
-            <TouchableOpacity onPress={() => openContractModal(item)} style={[styles.card, styles.contractCard]}>
+            <TouchableOpacity
+                onPress={() => openContractModal(item)}
+                style={[styles.card, styles.contractCard, isDesktop && { flex: 1 / numColumns - 0.05 }]}
+            >
                 <View style={styles.cardHeader}>
-                    <Text style={styles.cardTitle}>{item.destination_name}</Text>
-                    <Text style={styles.cardSubtitle}>{item.commodity}</Text>
+                    <View>
+                        <Text style={styles.cardTitle}>{item.destination_name}</Text>
+                        <Text style={styles.cardSubtitle}>{item.commodity}</Text>
+                    </View>
                 </View>
 
                 <View style={styles.progressContainer}>
@@ -228,12 +307,18 @@ export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) =>
                 </View>
 
                 <View style={styles.statsRow}>
-                    <Text style={styles.statLabel}>Delivered: <Text style={styles.statValue}>{item.delivered_bushels?.toLocaleString()} bu</Text></Text>
-                    <Text style={styles.statLabel}>Total: <Text style={styles.statValue}>{item.total_bushels?.toLocaleString()} bu</Text></Text>
+                    <View>
+                        <Text style={styles.statLabel}>Delivered</Text>
+                        <Text style={styles.statValue}>{item.delivered_bushels?.toLocaleString()} bu</Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.statLabel}>Contract Total</Text>
+                        <Text style={styles.statValue}>{item.total_bushels?.toLocaleString()} bu</Text>
+                    </View>
                 </View>
             </TouchableOpacity>
         );
-    }, [openContractModal]);
+    }, [openContractModal, isDesktop, numColumns]);
 
     const stats = useMemo(() => {
         const totalCapacity = bins.reduce((acc, b) => acc + (b.capacity || 0), 0);
@@ -250,7 +335,6 @@ export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) =>
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView contentContainerStyle={styles.scrollContent}>
-                {/* Tactical Alerts */}
                 {alerts.length > 0 && (
                     <View style={styles.alertsContainer}>
                         {alerts.map(alert => (
@@ -261,18 +345,25 @@ export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) =>
                     </View>
                 )}
 
-                {/* Farm-Wide Summary */}
                 <View style={styles.summaryContainer}>
                     <View style={styles.summaryBox}>
-                        <Text style={styles.summaryLabel}>Total Storage</Text>
-                        <Text style={styles.summaryValue}>{stats.storagePercent.toFixed(0)}%</Text>
-                        <Text style={styles.summarySub}>{stats.totalLevel.toLocaleString()} bu</Text>
+                        <Text style={styles.summaryLabel}>On Hand</Text>
+                        <Text style={styles.summaryValue}>{stats.totalLevel.toLocaleString()}</Text>
+                        <Text style={styles.summarySub}>Total Bushels in Bins</Text>
                     </View>
                     <View style={styles.summaryDivider} />
                     <View style={styles.summaryBox}>
-                        <Text style={styles.summaryLabel}>Sales Progress</Text>
-                        <Text style={styles.summaryValue}>{stats.contractPercent.toFixed(0)}%</Text>
-                        <Text style={styles.summarySub}>{stats.totalDelivered.toLocaleString()} / {stats.totalContracted.toLocaleString()}</Text>
+                        <Text style={styles.summaryLabel}>Contracted</Text>
+                        <Text style={styles.summaryValue}>{stats.totalContracted.toLocaleString()}</Text>
+                        <Text style={styles.summarySub}>{stats.totalDelivered.toLocaleString()} Delivered</Text>
+                    </View>
+                    <View style={styles.summaryDivider} />
+                    <View style={styles.summaryBox}>
+                        <Text style={styles.summaryLabel}>Position</Text>
+                        <Text style={[styles.summaryValue, { color: (stats.totalLevel - (stats.totalContracted - stats.totalDelivered)) < 0 ? '#FF5252' : '#8BC34A' }]}>
+                            {(stats.totalLevel - (stats.totalContracted - stats.totalDelivered)).toLocaleString()}
+                        </Text>
+                        <Text style={styles.summarySub}>Available to Sell</Text>
                     </View>
                 </View>
 
@@ -283,11 +374,14 @@ export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) =>
                     </TouchableOpacity>
                 </View>
                 <FlatList
+                    key={`bins-${numColumns}`}
                     data={bins}
                     renderItem={renderBin}
                     keyExtractor={(item) => item.id}
+                    numColumns={numColumns}
                     scrollEnabled={false}
-                    ListEmptyComponent={grainLoading ? <Text>Loading...</Text> : <Text style={styles.emptyText}>No bins configured.</Text>}
+                    columnWrapperStyle={numColumns > 1 ? { gap: Theme.spacing.md } : undefined}
+                    ListEmptyComponent={grainLoading ? <Text>...</Text> : <Text style={styles.emptyText}>No bins.</Text>}
                 />
 
                 <View style={styles.sectionHeader}>
@@ -297,34 +391,65 @@ export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) =>
                     </TouchableOpacity>
                 </View>
                 <FlatList
+                    key={`contracts-${numColumns}`}
                     data={contracts}
                     renderItem={renderContract}
                     keyExtractor={(item) => item.id}
+                    numColumns={numColumns}
                     scrollEnabled={false}
-                    ListEmptyComponent={contractLoading ? <Text>Loading...</Text> : <Text style={styles.emptyText}>No active contracts.</Text>}
+                    columnWrapperStyle={numColumns > 1 ? { gap: Theme.spacing.md } : undefined}
+                    ListEmptyComponent={contractLoading ? <Text>...</Text> : <Text style={styles.emptyText}>No contracts.</Text>}
                 />
             </ScrollView>
 
-            {/* Bin Modal */}
-            <Modal visible={binModalVisible} animationType="slide" transparent>
+            {/* Modals remain mostly the same but could be centered on desktop if needed */}
+            <Modal visible={binModalVisible} animationType="fade" transparent>
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
+                    <View style={[styles.modalContent, isDesktop && styles.desktopModal]}>
                         <Text style={styles.modalTitle}>{editingItem ? 'Edit Bin' : 'New Bin'}</Text>
-                        <TextInput style={styles.input} placeholder="Bin Name (e.g. Bin 1)" value={name} onChangeText={setName} />
-                        <TextInput style={styles.input} placeholder="Capacity (Bushels)" value={capacity} onChangeText={setCapacity} keyboardType="numeric" />
-                        <TextInput style={styles.input} placeholder="Crop Type (Corn/Soy)" value={cropType} onChangeText={setCropType} />
+                        <TextInput style={styles.input} placeholder="Name" value={name} onChangeText={setName} />
+                        <TextInput style={styles.input} placeholder="Capacity" value={capacity} onChangeText={setCapacity} keyboardType="numeric" />
+                        <TextInput style={styles.input} placeholder="Crop" value={cropType} onChangeText={setCropType} />
 
+                        {/* Landlord Selection */}
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#888', marginTop: 8, marginBottom: 4, textTransform: 'uppercase' }}>Landlord Split (Optional)</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                            <TouchableOpacity
+                                onPress={() => { setSelectedLandlordId(null); setSharePct(''); }}
+                                style={[styles.input, { flex: 1, minWidth: 80, justifyContent: 'center', backgroundColor: !selectedLandlordId ? '#E8F5E9' : '#fff', borderColor: !selectedLandlordId ? Theme.colors.primary : Theme.colors.border }]}
+                            >
+                                <Text style={{ textAlign: 'center', fontWeight: !selectedLandlordId ? 'bold' : 'normal' }}>No Split</Text>
+                            </TouchableOpacity>
+                            {landlords.map(l => (
+                                <TouchableOpacity
+                                    key={l.id}
+                                    onPress={() => setSelectedLandlordId(l.id)}
+                                    style={[styles.input, { flex: 1, minWidth: 80, justifyContent: 'center', backgroundColor: selectedLandlordId === l.id ? '#FFF8E1' : '#fff', borderColor: selectedLandlordId === l.id ? Theme.colors.warning : Theme.colors.border }]}
+                                >
+                                    <Text style={{ textAlign: 'center', fontWeight: selectedLandlordId === l.id ? 'bold' : 'normal' }}>{l.name}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        {selectedLandlordId && (
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Landlord Share % (e.g. 33)"
+                                value={sharePct}
+                                onChangeText={setSharePct}
+                                keyboardType="numeric"
+                            />
+                        )}
                         <View style={styles.modalActions}>
                             {editingItem && (
-                                <TouchableOpacity onPress={deleteCurrentBin} disabled={saving} style={[styles.modalButton, styles.deleteButton, saving && { opacity: 0.5 }]}>
+                                <TouchableOpacity onPress={deleteCurrentBin} style={[styles.modalButton, styles.deleteButton]}>
                                     <Text style={styles.buttonText}>Delete</Text>
                                 </TouchableOpacity>
                             )}
                             <View style={{ flex: 1 }} />
-                            <TouchableOpacity onPress={() => setBinModalVisible(false)} disabled={saving} style={[styles.modalButton, styles.cancelButton]}>
+                            <TouchableOpacity onPress={() => setBinModalVisible(false)} style={[styles.modalButton, styles.cancelButton]}>
                                 <Text style={[styles.buttonText, { color: '#333' }]}>Cancel</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={saveBin} disabled={saving} style={[styles.modalButton, styles.saveButton, saving && { opacity: 0.5 }]}>
+                            <TouchableOpacity onPress={saveBin} style={[styles.modalButton, styles.saveButton]}>
                                 <Text style={styles.buttonText}>{saving ? 'Saving...' : 'Save'}</Text>
                             </TouchableOpacity>
                         </View>
@@ -332,28 +457,26 @@ export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) =>
                 </KeyboardAvoidingView>
             </Modal>
 
-            {/* Contract Modal */}
-            <Modal visible={contractModalVisible} animationType="slide" transparent>
+            <Modal visible={contractModalVisible} animationType="fade" transparent>
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
+                    <View style={[styles.modalContent, isDesktop && styles.desktopModal]}>
                         <Text style={styles.modalTitle}>{editingItem ? 'Edit Contract' : 'New Contract'}</Text>
-                        <TextInput style={styles.input} placeholder="Destination (e.g. ADM)" value={destination} onChangeText={setDestination} />
+                        <TextInput style={styles.input} placeholder="Destination" value={destination} onChangeText={setDestination} />
                         <TextInput style={styles.input} placeholder="Commodity" value={commodity} onChangeText={setCommodity} />
                         <TextInput style={styles.input} placeholder="Total Bushels" value={totalBushels} onChangeText={setTotalBushels} keyboardType="numeric" />
-                        <TextInput style={styles.input} placeholder="Price ($/bu)" value={price} onChangeText={setPrice} keyboardType="numeric" />
-                        <TextInput style={styles.input} placeholder="Deadline (YYYY-MM-DD)" value={deadline} onChangeText={setDeadline} />
-
+                        <TextInput style={styles.input} placeholder="Price" value={price} onChangeText={setPrice} keyboardType="numeric" />
+                        <TextInput style={styles.input} placeholder="Deadline" value={deadline} onChangeText={setDeadline} />
                         <View style={styles.modalActions}>
                             {editingItem && (
-                                <TouchableOpacity onPress={deleteCurrentContract} disabled={saving} style={[styles.modalButton, styles.deleteButton, saving && { opacity: 0.5 }]}>
+                                <TouchableOpacity onPress={deleteCurrentContract} style={[styles.modalButton, styles.deleteButton]}>
                                     <Text style={styles.buttonText}>Delete</Text>
                                 </TouchableOpacity>
                             )}
                             <View style={{ flex: 1 }} />
-                            <TouchableOpacity onPress={() => setContractModalVisible(false)} disabled={saving} style={[styles.modalButton, styles.cancelButton]}>
+                            <TouchableOpacity onPress={() => setContractModalVisible(false)} style={[styles.modalButton, styles.cancelButton]}>
                                 <Text style={[styles.buttonText, { color: '#333' }]}>Cancel</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={saveContract} disabled={saving} style={[styles.modalButton, styles.saveButton, saving && { opacity: 0.5 }]}>
+                            <TouchableOpacity onPress={saveContract} style={[styles.modalButton, styles.saveButton]}>
                                 <Text style={styles.buttonText}>{saving ? 'Saving...' : 'Save'}</Text>
                             </TouchableOpacity>
                         </View>
@@ -375,14 +498,15 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         backgroundColor: Theme.colors.primary,
         borderRadius: Theme.borderRadius.md,
-        padding: Theme.spacing.xl,
+        paddingVertical: Theme.spacing.lg,
+        paddingHorizontal: Theme.spacing.md,
         marginBottom: Theme.spacing.lg,
         alignItems: 'center',
     },
     summaryBox: { flex: 1, alignItems: 'center' },
     summaryLabel: { ...Theme.typography.caption, color: Theme.colors.whiteMuted, fontWeight: 'bold' },
-    summaryValue: { fontSize: 32, fontWeight: 'bold', color: Theme.colors.white, marginVertical: Theme.spacing.xs },
-    summarySub: { ...Theme.typography.caption, color: Theme.colors.whiteMuted },
+    summaryValue: { fontSize: 24, fontWeight: 'bold', color: Theme.colors.white, marginVertical: 2 },
+    summarySub: { fontSize: 10, color: Theme.colors.whiteMuted, textAlign: 'center' },
     summaryDivider: { width: 1, height: '60%', backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: Theme.spacing.lg },
     card: {
         backgroundColor: Theme.colors.white,
@@ -396,9 +520,9 @@ const styles = StyleSheet.create({
     cardTitle: { ...Theme.typography.h2 },
     cardSubtitle: { ...Theme.typography.caption, color: Theme.colors.textSecondary },
     progressContainer: {
-        height: 20,
+        height: 12,
         backgroundColor: Theme.colors.surface,
-        borderRadius: 10,
+        borderRadius: 6,
         overflow: 'hidden',
         marginBottom: Theme.spacing.md,
     },
@@ -407,17 +531,21 @@ const styles = StyleSheet.create({
         backgroundColor: Theme.colors.primary,
     },
     contractCard: { borderColor: Theme.colors.primary },
-    contractProgress: { backgroundColor: Theme.colors.success },
+    contractProgress: { backgroundColor: '#388E3C' },
     statsRow: { flexDirection: 'row', justifyContent: 'space-between' },
-    statLabel: { ...Theme.typography.caption, color: Theme.colors.textSecondary },
+    statLabel: { ...Theme.typography.caption, color: Theme.colors.textSecondary, marginBottom: 2 },
     statValue: { fontWeight: 'bold', color: Theme.colors.text },
     emptyText: { fontStyle: 'italic', color: Theme.colors.textSecondary, marginBottom: 20 },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
     modalContent: {
         backgroundColor: Theme.colors.white,
-        borderTopLeftRadius: Theme.borderRadius.lg,
-        borderTopRightRadius: Theme.borderRadius.lg,
+        borderRadius: Theme.borderRadius.lg,
         padding: Theme.spacing.xl,
+        width: '90%',
+        maxWidth: 500,
+    },
+    desktopModal: {
+        width: 500,
     },
     modalTitle: { ...Theme.typography.h2, marginBottom: Theme.spacing.lg },
     input: {
@@ -429,26 +557,27 @@ const styles = StyleSheet.create({
         marginBottom: Theme.spacing.md,
     },
     modalActions: { flexDirection: 'row', marginTop: Theme.spacing.lg },
-    modalButton: { padding: Theme.spacing.md, borderRadius: Theme.borderRadius.sm, alignItems: 'center' },
-    saveButton: { backgroundColor: Theme.colors.primary, minWidth: 100 },
+    modalButton: { padding: Theme.spacing.md, borderRadius: Theme.borderRadius.sm, alignItems: 'center', minWidth: 80 },
+    saveButton: { backgroundColor: Theme.colors.primary },
     cancelButton: { backgroundColor: Theme.colors.surface, marginRight: Theme.spacing.md },
     deleteButton: { backgroundColor: Theme.colors.danger, marginRight: Theme.spacing.md },
-    buttonText: { color: Theme.colors.white, fontWeight: 'bold', fontSize: 16 },
-
+    buttonText: { color: Theme.colors.white, fontWeight: 'bold', fontSize: 14 },
     cardActions: {
         flexDirection: 'row',
         marginTop: Theme.spacing.md,
+        borderTopWidth: 1,
+        borderTopColor: Theme.colors.border,
+        paddingTop: Theme.spacing.md,
     },
     actionButton: {
         flex: 1,
-        backgroundColor: Theme.colors.primary,
         padding: Theme.spacing.sm,
         borderRadius: Theme.borderRadius.sm,
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: Theme.colors.primary,
     },
-    actionButtonText: { color: Theme.colors.white, fontSize: 14, fontWeight: 'bold' },
-
-    // Alerts Styles
+    actionButtonText: { color: Theme.colors.primary, fontSize: 12, fontWeight: 'bold' },
     alertsContainer: { marginBottom: Theme.spacing.lg },
     alertBar: {
         padding: Theme.spacing.md,
@@ -465,4 +594,28 @@ const styles = StyleSheet.create({
         borderLeftColor: '#F59E0B',
     },
     alertText: { ...Theme.typography.caption, fontWeight: 'bold', color: '#1F2937' },
+    statusBadge: {
+        backgroundColor: Theme.colors.surface,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: Theme.colors.border,
+    },
+    statusBadgeText: {
+        ...Theme.typography.caption,
+        fontWeight: 'bold',
+        color: Theme.colors.primary,
+    },
+    quickInput: {
+        borderWidth: 1,
+        borderColor: Theme.colors.primary,
+        borderRadius: 4,
+        padding: 4,
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: Theme.colors.primary,
+        width: 140,
+        backgroundColor: '#FFF',
+    },
 });

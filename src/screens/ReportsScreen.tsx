@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, Platform } from 'react-native';
+import { showAlert } from '../utils/AlertUtility';
 import { Theme } from '../constants/Theme';
 import { generateReport } from '../utils/ReportUtility';
+import { exportToCSV } from '../utils/ExportUtility';
 import { useSpray } from '../hooks/useSpray';
 import { useGrain } from '../hooks/useGrain';
 import { usePlanting } from '../hooks/usePlanting';
@@ -14,11 +16,25 @@ export const ReportsScreen = () => {
     const { plantingLogs } = usePlanting();
     const { settings } = useSettings();
 
-    const handleExport = async (type: 'SPRAY' | 'PLANTING' | 'GRAIN', format: 'PDF' | 'CSV') => {
+    const handleExport = async (type: 'SPRAY' | 'PLANTING' | 'GRAIN' | 'SEASON', format: 'PDF' | 'CSV') => {
         setGenerating(true);
         try {
             if (format === 'CSV') {
-                Alert.alert('Info', 'CSV Export not yet implemented for these compliance items.');
+                if (type === 'SPRAY') {
+                    exportToCSV(sprayLogs, `spray_logs_${new Date().toISOString().split('T')[0]}`);
+                } else if (type === 'PLANTING') {
+                    exportToCSV(plantingLogs, `planting_logs_${new Date().toISOString().split('T')[0]}`);
+                } else if (type === 'GRAIN') {
+                    exportToCSV(grainLogs, `harvest_logs_${new Date().toISOString().split('T')[0]}`);
+                } else if (type === 'SEASON') {
+                    const aggregated = [
+                        ...plantingLogs.map(p => ({ ...p, type: 'PLANTING' })),
+                        ...sprayLogs.map(s => ({ ...s, type: 'SPRAYING' })),
+                        ...grainLogs.map(g => ({ ...g, type: 'HARVEST' }))
+                    ];
+                    exportToCSV(aggregated, `full_season_${new Date().getFullYear()}`);
+                }
+                setGenerating(false);
                 return;
             }
 
@@ -30,7 +46,6 @@ export const ReportsScreen = () => {
                     type: 'EPA_SPRAY'
                 });
             } else if (type === 'GRAIN') {
-                // Simplified harvest report from operational logs
                 await generateReport({
                     farmName: settings?.farm_name || 'My Farm',
                     dateRange: 'All Time',
@@ -49,30 +64,45 @@ export const ReportsScreen = () => {
                     logs: plantingLogs.map(p => ({
                         start_time: p.start_time,
                         field_name: p.field_name || 'N/A',
-                        product_name: `${p.brand || ''} ${p.variety_name || 'Seed'}`,
+                        product_name: `${p.brand || ''} ${p.variety_name || 'Seed'} `,
                         epa_number: 'N/A',
                         rate_per_acre: p.population,
                         unit: 'Seeds/Ac',
                         wind_speed: 0,
                         wind_dir: '-'
                     })),
-                    type: 'EPA_SPRAY' // Reusing EPA layout for simplicity for now
+                    type: 'EPA_SPRAY'
                 });
-            } else {
-                Alert.alert('Info', 'Report type not recognized.');
+            } else if (type === 'SEASON') {
+                // AGGREGATE ALL DATA
+                const aggregatedLogs = [
+                    ...plantingLogs.map(p => ({ ...p, reportType: 'PLANTING', product_name: `${p.brand || ''} ${p.variety_name || 'Seed'} `, rate_per_acre: p.population, unit: 'Seeds/Ac' })),
+                    ...sprayLogs.map(s => ({ ...s, reportType: 'SPRAYING' })),
+                    ...grainLogs.map(g => ({ ...g, reportType: 'HARVEST', fieldName: g.field_id || 'Unknown', totalBushels: g.bushels_net, sharePercentage: 1.0, landlordBushels: 0 }))
+                ];
+
+                await generateReport({
+                    farmName: settings?.farm_name || 'My Farm',
+                    dateRange: new Date().getFullYear().toString(),
+                    logs: aggregatedLogs,
+                    type: 'SEASON_PACKET'
+                });
             }
-            Alert.alert('Success', 'Report generated and ready to share.');
+            showAlert('Success', 'Report generated and ready to share.');
         } catch (error) {
             console.error('Report error:', error);
-            Alert.alert('Error', 'Failed to generate report');
+            showAlert('Error', 'Failed to generate report');
         } finally {
             setGenerating(false);
         }
     };
 
-    const ReportCard = ({ title, type }: { title: string, type: 'SPRAY' | 'PLANTING' | 'GRAIN' }) => (
+    const ReportCard = ({ title, type, subtitle }: { title: string, type: 'SPRAY' | 'PLANTING' | 'GRAIN' | 'SEASON', subtitle?: string }) => (
         <View style={styles.card}>
-            <Text style={styles.cardTitle}>{title}</Text>
+            <View>
+                <Text style={styles.cardTitle}>{title}</Text>
+                {subtitle && <Text style={styles.cardSubtitle}>{subtitle}</Text>}
+            </View>
             <View style={styles.buttonRow}>
                 <TouchableOpacity
                     style={[styles.button, styles.pdfButton]}
@@ -95,7 +125,14 @@ export const ReportsScreen = () => {
     return (
         <View style={styles.container}>
             <ScrollView contentContainerStyle={styles.scrollContent}>
-                <Text style={styles.sectionTitle}>Operational Audits</Text>
+                <Text style={styles.sectionTitle}>Season Preparation</Text>
+                <ReportCard
+                    title="Season Packet (Master Report)"
+                    subtitle="Aggregated Seed, Chem, and Harvest logs for landlords."
+                    type="SEASON"
+                />
+
+                <Text style={[styles.sectionTitle, { marginTop: Theme.spacing.xl }]}>Operational Audits</Text>
                 <ReportCard title="Spray Logs (Chemicals)" type="SPRAY" />
                 <ReportCard title="Planting Logs (Seed)" type="PLANTING" />
                 <ReportCard title="Grain Logs (Harvest)" type="GRAIN" />
@@ -122,7 +159,8 @@ const styles = StyleSheet.create({
         marginBottom: Theme.spacing.md,
         ...Theme.shadows.sm,
     },
-    cardTitle: { ...Theme.typography.body, fontWeight: 'bold', marginBottom: Theme.spacing.md },
+    cardTitle: { ...Theme.typography.body, fontWeight: 'bold', marginBottom: 4 },
+    cardSubtitle: { ...Theme.typography.caption, color: Theme.colors.textSecondary, marginBottom: Theme.spacing.md },
     buttonRow: { flexDirection: 'row', gap: Theme.spacing.md },
     button: {
         flex: 1,
