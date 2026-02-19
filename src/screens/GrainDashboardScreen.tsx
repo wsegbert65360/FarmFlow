@@ -8,9 +8,10 @@ import { useLandlords, Landlord } from '../hooks/useLandlords';
 
 interface GrainDashboardProps {
     onSelectAction: (id: string, name: string, type: 'HARVEST' | 'DELIVERY') => void;
+    mode?: 'MANAGE' | 'SELECT_BIN' | 'SELECT_CONTRACT';
 }
 
-export const GrainDashboardScreen = ({ onSelectAction }: GrainDashboardProps) => {
+export const GrainDashboardScreen = ({ onSelectAction, mode = 'MANAGE' }: GrainDashboardProps) => {
     const { bins, loading: grainLoading, addBin: createBin, updateBin, deleteBin, addGrainLog } = useGrain();
     const { contracts, loading: contractLoading, addContract: createContract, updateContract, deleteContract } = useContracts();
     const { landlords } = useLandlords();

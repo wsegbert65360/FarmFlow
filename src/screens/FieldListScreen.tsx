@@ -13,9 +13,10 @@ import { useAgreements } from '../hooks/useAgreements';
 
 interface FieldListProps {
     onSelectAction: (field: Field, type: 'SPRAY' | 'PLANTING' | 'HARVEST' | 'DELIVERY', replacesLogId?: string) => void;
+    mode?: 'MANAGE' | 'SELECT';
 }
 
-export const FieldListScreen = ({ onSelectAction }: FieldListProps) => {
+export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListProps) => {
     const { fields, loading: fieldsLoading, addField } = useFields();
     const { atRiskCount, loading: inventoryLoading } = useInventory();
     const { farmId } = useDatabase();
@@ -164,10 +165,12 @@ export const FieldListScreen = ({ onSelectAction }: FieldListProps) => {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.title}>Your Fields</Text>
-                <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
-                    <Text style={styles.addButtonText}>+ Field</Text>
-                </TouchableOpacity>
+                <Text style={styles.title}>{mode === 'SELECT' ? 'Select Field' : 'Your Fields'}</Text>
+                {mode === 'MANAGE' && (
+                    <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
+                        <Text style={styles.addButtonText}>+ Field</Text>
+                    </TouchableOpacity>
+                )}
             </View>
             {atRiskCount > 0 && (
                 <View style={styles.alertBanner}>

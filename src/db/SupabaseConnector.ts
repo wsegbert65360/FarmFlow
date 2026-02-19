@@ -1,18 +1,15 @@
 import { PowerSyncBackendConnector, AbstractPowerSyncDatabase } from '@powersync/common';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '../supabase/client';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 
-// Production Supabase Credentials
+// Constants moved to client.ts, but connector needs URL for upload checks
 const SUPABASE_URL = 'https://skkbmmxjclpbbijcrgyi.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_CTRPsiYo2fZ5wiA9yUG6kA_krlOpMSi';
 
 export class SupabaseConnector implements PowerSyncBackendConnector {
-    client: SupabaseClient;
+    client = supabase;
 
-    constructor() {
-        this.client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    }
+    constructor() { }
 
     /** Unified helper for getting the current session */
     async getSession() {

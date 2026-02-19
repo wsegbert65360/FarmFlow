@@ -254,8 +254,12 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                     rei_hours: selectedRecipe?.rei_hours,
                     notes: notes,
                     sprayedAt: sprayedAt.toISOString(),
-                    replacesLogId,
-                    voidReason
+                    sprayedAt: sprayedAt.toISOString(),
+                    // Safety: Void & Replace
+                    // If replacesLogId is set, backend/hook logic must handle the voiding of the old record.
+                    // We pass the new ID reference and reason.
+                    replacesLogId: replacesLogId || undefined,
+                    voidReason: replacesLogId ? voidReason : undefined
                 });
             } else if (type === 'PLANTING') {
                 await addPlantingLog({
@@ -265,8 +269,8 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                     depth: parseFloat(depth),
                     notes: notes,
                     plantedAt: sprayedAt.toISOString(),
-                    replacesLogId,
-                    voidReason
+                    replacesLogId: replacesLogId || undefined,
+                    voidReason: replacesLogId ? voidReason : undefined
                 });
             } else if (type === 'HARVEST') {
                 const fieldId = fixedType === 'FIELD' ? fixedId : null;
