@@ -37,6 +37,26 @@ if (Platform.OS !== 'web') {
 // 1. Define the Local Schema (matches Postgres projections)
 export const AppSchema = new Schema([
     new Table({
+        name: 'farms',
+        columns: [
+            new Column({ name: 'id', type: ColumnType.TEXT }),
+            new Column({ name: 'name', type: ColumnType.TEXT }),
+            new Column({ name: 'owner_id', type: ColumnType.TEXT }),
+            new Column({ name: 'created_at', type: ColumnType.TEXT }),
+        ],
+    }),
+    new Table({
+        name: 'invites',
+        columns: [
+            new Column({ name: 'id', type: ColumnType.TEXT }),
+            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
+            new Column({ name: 'token', type: ColumnType.TEXT }),
+            new Column({ name: 'role', type: ColumnType.TEXT }),
+            new Column({ name: 'expires_at', type: ColumnType.TEXT }),
+            new Column({ name: 'created_at', type: ColumnType.TEXT }),
+        ],
+    }),
+    new Table({
         name: 'fields',
         columns: [
             new Column({ name: 'id', type: ColumnType.TEXT }),
@@ -256,7 +276,7 @@ export const AppSchema = new Schema([
             new Column({ name: 'id', type: ColumnType.TEXT }),
             new Column({ name: 'field_id', type: ColumnType.TEXT }),
             new Column({ name: 'landlord_id', type: ColumnType.TEXT }),
-            new Column({ name: 'share_percentage', type: ColumnType.REAL }), // e.g. 0.5 for 50%
+            new Column({ name: 'share_percentage', type: ColumnType.REAL }),
             new Column({ name: 'farm_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
         ],
@@ -378,7 +398,9 @@ class ExpoPowerSyncDatabase extends AbstractPowerSyncDatabase {
         try {
             // Optimized indices for Phase 3 query patterns
             await this.execute('CREATE INDEX IF NOT EXISTS idx_spray_logs_field_time ON spray_logs(field_id, start_time)');
-            // ...
+            await this.execute('CREATE INDEX IF NOT EXISTS idx_farms_owner ON farms(owner_id)');
+            await this.execute('CREATE INDEX IF NOT EXISTS idx_invites_token ON invites(token)');
+            await this.execute('CREATE INDEX IF NOT EXISTS idx_farm_members_user ON farm_members(user_id)');
             await this.execute('CREATE INDEX IF NOT EXISTS idx_grain_logs_bin_time ON grain_logs(bin_id, start_time)');
             await this.execute('CREATE INDEX IF NOT EXISTS idx_planting_logs_field_time ON planting_logs(field_id, start_time)');
             await this.execute('CREATE INDEX IF NOT EXISTS idx_attachments_owner ON attachments(owner_record_id)');

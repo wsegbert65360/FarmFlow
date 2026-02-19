@@ -10,6 +10,7 @@ export interface Settings {
     default_applicator_name?: string;
     default_applicator_cert?: string;
     farm_id: string;
+    farm_join_token?: string;
 }
 
 export const useSettings = () => {
@@ -35,6 +36,7 @@ export const useSettings = () => {
                             default_applicator_name: row.default_applicator_name || '',
                             default_applicator_cert: row.default_applicator_cert || '',
                             farm_id: row.farm_id || '',
+                            farm_join_token: row.farm_join_token || '',
                         });
                     }
                     setLoading(false);
@@ -67,8 +69,8 @@ export const useSettings = () => {
             const merged = { ...current, ...updated };
 
             await db.execute(
-                `INSERT OR REPLACE INTO settings (id, farm_name, state, units, onboarding_completed, default_applicator_name, default_applicator_cert, farm_id, updated_at) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT OR REPLACE INTO settings (id, farm_name, state, units, onboarding_completed, default_applicator_name, default_applicator_cert, farm_id, farm_join_token, updated_at) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     'farm_config',
                     merged.farm_name,
@@ -78,6 +80,7 @@ export const useSettings = () => {
                     merged.default_applicator_name,
                     merged.default_applicator_cert,
                     merged.farm_id,
+                    merged.farm_join_token,
                     new Date().toISOString(),
                 ]
             );

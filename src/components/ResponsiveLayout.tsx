@@ -10,9 +10,10 @@ interface ResponsiveLayoutProps {
     onSyncPress?: () => void;
     farmName: string;
     isConnected: boolean;
+    isSyncing?: boolean;
 }
 
-export const ResponsiveLayout = ({ children, activeTab, setActiveTab, onSyncPress, farmName, isConnected }: ResponsiveLayoutProps) => {
+export const ResponsiveLayout = ({ children, activeTab, setActiveTab, onSyncPress, farmName, isConnected, isSyncing = false }: ResponsiveLayoutProps) => {
     const { width } = useWindowDimensions();
     const isDesktop = width > 768;
 
@@ -32,7 +33,7 @@ export const ResponsiveLayout = ({ children, activeTab, setActiveTab, onSyncPres
                             />
                             <Text style={styles.sidebarTitle}>{farmName}</Text>
                         </View>
-                        <StatusOverlay isConnected={isConnected} variant="sidebar" />
+                        <StatusOverlay isConnected={isConnected} isSyncing={isSyncing} onRetry={onSyncPress} variant="sidebar" />
                     </View>
                 </View>
 

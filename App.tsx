@@ -144,20 +144,21 @@ export default function App() {
           </View>
           <TouchableOpacity
             style={styles.syncContainer}
-            onPress={() => {
+            onPress={async () => {
               const { SyncUtility } = require('./src/utils/SyncUtility');
               const { showAlert } = require('./src/utils/AlertUtility');
               if (session?.user && !SyncUtility.isNativeStreamingAvailable()) {
                 setBootstrapping(true);
-                SyncUtility.pushAllLocalData()
-                  .then((result: any) => {
-                    return SyncUtility.bootstrapDevice(session.user.id)
-                      .then((farmId: string | null) => {
-                        showAlert('Sync Complete', result.debugLog);
-                      });
-                  })
-                  .catch((err: any) => showAlert('Sync Failed', String(err?.message || err)))
-                  .finally(() => setBootstrapping(false));
+                try {
+                  const result = await SyncUtility.pushAllLocalData();
+                  await SyncUtility.bootstrapDevice(session.user.id);
+                  setIsConnected(true);
+                  showAlert('Sync Complete', `Pushed ${result.pushed} rows to cloud.`);
+                } catch (err: any) {
+                  showAlert('Sync Failed', String(err?.message || err));
+                } finally {
+                  setBootstrapping(false);
+                }
               }
             }}
           >
@@ -171,8 +172,6 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onSyncPress={async () => {
-          setActiveTab('VAULTS');
-          setVaultSubTab('SETTINGS');
           const { SyncUtility } = require('./src/utils/SyncUtility');
           const { showAlert } = require('./src/utils/AlertUtility');
 
@@ -193,8 +192,25 @@ export default function App() {
         }}
         farmName={settings?.farm_name || 'FarmFlow'}
         isConnected={isConnected}
+        isSyncing={bootstrapping}
       >
-        {width <= 768 && <StatusOverlay isConnected={isConnected} />}
+        {width <= 768 && (
+          <StatusOverlay
+            isConnected={isConnected}
+            isSyncing={bootstrapping}
+            onRetry={() => {
+              // Direct retry logic for mobile overlay
+              const { SyncUtility } = require('./src/utils/SyncUtility');
+              if (session?.user && !SyncUtility.isNativeStreamingAvailable()) {
+                setBootstrapping(true);
+                SyncUtility.pushAllLocalData()
+                  .then(() => SyncUtility.bootstrapDevice(session.user.id))
+                  .then(() => setIsConnected(true))
+                  .finally(() => setBootstrapping(false));
+              }
+            }}
+          />
+        )}
 
         <View style={styles.content}>
           {activeTab === 'FIELDS' ? (

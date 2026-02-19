@@ -29,13 +29,32 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
 
                 if (!user) throw new Error('User not authenticated');
 
-                // 1. Create the membership record locally
-                await db.execute(
-                    'INSERT INTO farm_members (id, user_id, farm_id, role, created_at) VALUES (?, ?, ?, ?, ?)',
-                    [uuidv4(), user.id, farmId, 'OWNER', new Date().toISOString()]
-                );
+                // 1. Create the farm record
+                const { error: farmError } = await connector.client
+                    .from('farms')
+                    .insert({
+                        id: farmId,
+                        name: farmName,
+                        owner_id: user.id,
+                        created_at: new Date().toISOString()
+                    });
 
-                // 2. Save settings
+                if (farmError) throw farmError;
+
+                // 2. Create the membership record
+                const { error: memberError } = await connector.client
+                    .from('farm_members')
+                    .insert({
+                        id: uuidv4(),
+                        user_id: user.id,
+                        farm_id: farmId,
+                        role: 'OWNER',
+                        created_at: new Date().toISOString()
+                    });
+
+                if (memberError) throw memberError;
+
+                // 3. Save settings locally
                 await saveSettings({
                     farm_name: farmName,
                     state: state,
@@ -48,7 +67,7 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
             } catch (error: any) {
                 console.error('Registration Error:', error);
                 const msg = error.message || 'Unknown network error';
-                showAlert('Registration Failed', `Could not create farm: ${msg} \n\nCheck if your Supabase tables have a 'farm_id' column.`);
+                showAlert('Registration Failed', `Could not create farm: ${msg}`);
             }
         }
     };
@@ -57,35 +76,59 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
         if (isScanning) return;
         setIsScanning(true);
         try {
-            const parsed = JSON.parse(data);
-            if (parsed.f) {
-                const { data: { user } } = await connector.client.auth.getUser();
-                if (!user) throw new Error('User not authenticated');
+            let token = data;
+            try {
+                const parsed = JSON.parse(data);
+                token = parsed.token || parsed.t || data;
+            } catch (e) {
+                // Not JSON, assume data is the raw token
+            }
 
-                // 1. Create the membership record locally
-                await db.execute(
-                    'INSERT INTO farm_members (id, user_id, farm_id, role, created_at) VALUES (?, ?, ?, ?, ?)',
-                    [uuidv4(), user.id, parsed.f, 'WORKER', new Date().toISOString()]
-                );
+            const { data: { user } } = await connector.client.auth.getUser();
+            if (!user) throw new Error('User not authenticated');
 
-                // 2. Update settings
-                await saveSettings({
-                    farm_id: parsed.f,
-                    farm_name: parsed.n || 'Joined Farm',
-                    onboarding_completed: true
+            // 1. Validate token and get farm info
+            const { data: invite, error: inviteError } = await connector.client
+                .from('invites')
+                .select('farm_id, role, farms(name)')
+                .eq('token', token)
+                .single();
+
+            if (inviteError || !invite) {
+                throw new Error('Invalid or expired invitation token.');
+            }
+
+            const farmId = invite.farm_id;
+            const farmName = (invite as any).farms?.name || 'Joined Farm';
+
+            // 2. Join the farm (create membership)
+            const { error: joinError } = await connector.client
+                .from('farm_members')
+                .insert({
+                    id: uuidv4(),
+                    user_id: user.id,
+                    farm_id: farmId,
+                    role: invite.role,
+                    created_at: new Date().toISOString()
                 });
 
-                setShowScanner(false);
-                onComplete();
-                showAlert('Success', 'Joined farm successfully!');
+            if (joinError) throw joinError;
 
-                // Trigger fallback sync for immediate data availability
-                const { SyncUtility } = require('../utils/SyncUtility');
-                if (!SyncUtility.isNativeStreamingAvailable()) {
-                    SyncUtility.pullAllFarmData(parsed.f).catch(console.error);
-                }
-            } else {
-                showAlert('Invalid QR', 'This QR code does not contain a valid farm ID.');
+            // 3. Update settings locally
+            await saveSettings({
+                farm_id: farmId,
+                farm_name: farmName,
+                onboarding_completed: true
+            });
+
+            setShowScanner(false);
+            onComplete();
+            showAlert('Success', `Joined ${farmName} successfully!`);
+
+            // Trigger fallback sync
+            const { SyncUtility } = require('../utils/SyncUtility');
+            if (!SyncUtility.isNativeStreamingAvailable()) {
+                SyncUtility.pullAllFarmData(farmId).catch(console.error);
             }
         } catch (error: any) {
             console.error('Join failed:', error);
@@ -188,10 +231,10 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
                         </View>
 
                         <View style={styles.manualGroup}>
-                            <Text style={styles.label}>Enter Farm ID Manually</Text>
+                            <Text style={styles.label}>Enter Invitation Token</Text>
                             <TextInput
                                 style={styles.input}
-                                placeholder="8-4-4-4-12 format"
+                                placeholder="Token from farm owner"
                                 value={manualId}
                                 onChangeText={setManualId}
                                 autoCapitalize="none"
@@ -199,10 +242,10 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
                             />
                             <TouchableOpacity
                                 style={[styles.manualButton, !manualId && styles.disabledButton]}
-                                onPress={() => handleScanJoin(JSON.stringify({ f: manualId, n: 'Joined Farm' }))}
+                                onPress={() => handleScanJoin(manualId)}
                                 disabled={!manualId || joiningManual}
                             >
-                                <Text style={styles.manualButtonText}>{joiningManual ? 'Joining...' : 'Join with ID'}</Text>
+                                <Text style={styles.manualButtonText}>{joiningManual ? 'Joining...' : 'Join with Token'}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

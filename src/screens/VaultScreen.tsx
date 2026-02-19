@@ -11,6 +11,8 @@ import { generateReport } from '../utils/ReportUtility';
 import { generateDiagnosticReport } from '../utils/DiagnosticUtility';
 import { useSettings } from '../hooks/useSettings';
 import { lookupEPA, calculateMaxRestrictions } from '../utils/EPAUtility';
+import { connector } from '../db/SupabaseConnector';
+import { v4 as uuidv4 } from 'uuid';
 
 type VaultTab = 'CHEMICALS' | 'SEEDS' | 'LANDLORDS' | 'REPORTS' | 'SETTINGS';
 type VaultItem = Recipe | SeedVariety | Landlord;
@@ -30,6 +32,8 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
     const [modalVisible, setModalVisible] = useState(false);
     const [editingItem, setEditingItem] = useState<VaultItem | null>(null);
     const [saving, setSaving] = useState(false);
+    const [inviteToken, setInviteToken] = useState<string | null>(null);
+    const [generatingInvite, setGeneratingInvite] = useState(false);
 
     React.useEffect(() => {
         if (initialTab) {
@@ -127,6 +131,31 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
         const feedback = `Safety data calculated:\nPHI: ${suggestedPhi} Days\nREI: ${suggestedRei} Hours${namesUpdated ? '\n\nProduct names auto-filled.' : ''}`;
 
         showAlert('Smart Fill Active', feedback);
+    };
+
+    const generateInvite = async () => {
+        if (!settings?.farm_id) return;
+        setGeneratingInvite(true);
+        try {
+            const token = Math.random().toString(36).substring(2, 11).toUpperCase(); // Simple random token
+            const { error } = await connector.client
+                .from('invites')
+                .insert({
+                    id: uuidv4(),
+                    farm_id: settings.farm_id,
+                    token: token,
+                    role: 'WORKER',
+                    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+                });
+
+            if (error) throw error;
+            setInviteToken(token);
+            saveSettings({ farm_join_token: token }); // Save last token to settings too
+        } catch (e: any) {
+            showAlert('Error', `Failed to generate invite: ${e.message}`);
+        } finally {
+            setGeneratingInvite(false);
+        }
     };
 
     const handleSave = async () => {
@@ -316,32 +345,55 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
                                                 onChangeText={(v) => saveSettings({ default_applicator_cert: v })}
                                             />
 
-                                            <Text style={styles.sectionLabel}>Farm ID & Online Access</Text>
+                                            <Text style={styles.sectionLabel}>Farm ID & Team Access</Text>
                                             <View style={styles.input}>
-                                                <Text style={{ fontSize: 12, color: Theme.colors.textSecondary }}>Active Farm ID:</Text>
+                                                <Text style={{ fontSize: 12, color: Theme.colors.textSecondary }}>Active Farm ID (Internal):</Text>
                                                 <Text style={{ fontWeight: 'bold' }}>{settings?.farm_id}</Text>
                                             </View>
 
                                             {settings?.farm_id ? (
                                                 <View style={styles.qrContainer}>
-                                                    <Text style={styles.qrLabel}>Farm Invitation QR</Text>
-                                                    <View style={styles.qrWrapper}>
-                                                        <QRCode
-                                                            value={JSON.stringify({
-                                                                f: settings.farm_id,
-                                                                n: settings.farm_name
-                                                            })}
-                                                            size={200}
-                                                            quietZone={10}
-                                                        />
-                                                    </View>
-                                                    <Text style={styles.cardSub}>Scan this on another device to join <Text style={{ fontWeight: 'bold' }}>{settings.farm_name}</Text>.</Text>
+                                                    <Text style={styles.qrLabel}>Farm Invitation</Text>
+
+                                                    {inviteToken || settings?.farm_join_token ? (
+                                                        <>
+                                                            <View style={styles.qrWrapper}>
+                                                                <QRCode
+                                                                    value={JSON.stringify({
+                                                                        t: inviteToken || settings?.farm_join_token
+                                                                    })}
+                                                                    size={200}
+                                                                    quietZone={10}
+                                                                />
+                                                            </View>
+                                                            <View style={{ marginTop: 15, alignItems: 'center' }}>
+                                                                <Text style={{ fontWeight: 'bold', fontSize: 24, letterSpacing: 2 }}>{inviteToken || settings?.farm_join_token}</Text>
+                                                                <Text style={styles.cardSub}>Security Token (Single Use / 7 Days)</Text>
+                                                            </View>
+                                                        </>
+                                                    ) : (
+                                                        <View style={{ padding: 40, alignItems: 'center' }}>
+                                                            <Text style={styles.emptyText}>No active invitation token.</Text>
+                                                        </View>
+                                                    )}
+
+                                                    <TouchableOpacity
+                                                        style={[styles.addButton, { marginTop: 20, width: '100%', alignItems: 'center' }]}
+                                                        onPress={generateInvite}
+                                                        disabled={generatingInvite}
+                                                    >
+                                                        <Text style={styles.addButtonText}>{generatingInvite ? 'Generating...' : 'Generate New Invite Token'}</Text>
+                                                    </TouchableOpacity>
+
+                                                    <Text style={[styles.cardSub, { marginTop: 15, textAlign: 'center' }]}>
+                                                        Ask a worker to scan this QR or enter the code in their Onboarding screen.
+                                                    </Text>
                                                 </View>
                                             ) : (
-                                                <Text style={styles.cardSub}>Complete onboarding to generate a farm invite QR.</Text>
+                                                <Text style={styles.cardSub}>Complete onboarding to generate a farm invite.</Text>
                                             )}
 
-                                            <Text style={styles.cardSub}>These details will auto-fill your spray logs to meet state audit requirements.</Text>
+                                            <Text style={[styles.cardSub, { marginTop: 20 }]}>These details will auto-fill your spray logs to meet state audit requirements.</Text>
                                         </View>
                                     )) as any
                 }
