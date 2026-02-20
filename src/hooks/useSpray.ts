@@ -65,19 +65,19 @@ export const useSpray = () => {
                 void_reason: reason
             });
 
-            // 2. Add BACK to inventory from snapshot items
-            const snapshotItems = await db.getAll('SELECT * FROM spray_log_items WHERE spray_log_id = ?', [logId]) as any[];
-            if (snapshotItems && snapshotItems.length > 0) {
-                for (const item of snapshotItems) {
-                    await insertFarmRow('inventory_adjustments', {
-                        id: uuidv4(),
-                        product_name: item.product_name,
-                        amount: item.total_amount, // Positive = addition back to hand
-                        reason: 'LOG_VOIDED',
-                        reference_id: logId
-                    });
-                }
-            }
+            // 2. Add BACK to inventory from snapshot items - DISABLED for Phase 10
+            // const snapshotItems = await db.getAll('SELECT * FROM spray_log_items WHERE spray_log_id = ?', [logId]) as any[];
+            // if (snapshotItems && snapshotItems.length > 0) {
+            //     for (const item of snapshotItems) {
+            //         await insertFarmRow('inventory_adjustments', {
+            //             id: uuidv4(),
+            //             product_name: item.product_name,
+            //             amount: item.total_amount, // Positive = addition back to hand
+            //             reason: 'LOG_VOIDED',
+            //             reference_id: logId
+            //         });
+            //     }
+            // }
 
 
         } catch (error) {
@@ -171,18 +171,18 @@ export const useSpray = () => {
 
                 await bulkInsertFarmRows('spray_log_items', itemRows);
 
-                // Audit Adjustment (Deduction) for each item
-                const adjustmentRows = selectedRecipe.items.map(item => ({
-                    id: uuidv4(),
-                    product_name: item.product_name,
-                    amount: -(item.rate * (params.acresTreated || 0)), // Negative because it's a deduction
-                    unit: item.unit,
-                    source_type: 'SPRAY_LOG',
-                    source_id: id,
-                    notes: `App: ${params.applicatorName || 'N/A'}`
-                }));
+                // Audit Adjustment (Deduction) for each item - DISABLED for Phase 10
+                // const adjustmentRows = selectedRecipe.items.map(item => ({
+                //     id: uuidv4(),
+                //     product_name: item.product_name,
+                //     amount: -(item.rate * (params.acresTreated || 0)), // Negative because it's a deduction
+                //     unit: item.unit,
+                //     source_type: 'SPRAY_LOG',
+                //     source_id: id,
+                //     notes: `App: ${params.applicatorName || 'N/A'}`
+                // }));
 
-                await bulkInsertFarmRows('inventory_adjustments', adjustmentRows);
+                // await bulkInsertFarmRows('inventory_adjustments', adjustmentRows);
             } else if (selectedRecipe?.product_name) {
                 // FALLBACK for legacy recipes
                 const productName = selectedRecipe.product_name;
@@ -198,13 +198,13 @@ export const useSpray = () => {
                     total_unit: 'Gal'
                 });
 
-                await insertFarmRow('inventory_adjustments', {
-                    id: uuidv4(),
-                    product_name: productName,
-                    amount: -params.totalProduct, // Negative = deduction
-                    reason: replacesLogId ? 'LOG_CORRECTION' : 'LOG_CREATED',
-                    reference_id: id
-                });
+                // await insertFarmRow('inventory_adjustments', {
+                //     id: uuidv4(),
+                //     product_name: productName,
+                //     amount: -params.totalProduct, // Negative = deduction
+                //     reason: replacesLogId ? 'LOG_CORRECTION' : 'LOG_CREATED',
+                //     reference_id: id
+                // });
             }
 
             return id;

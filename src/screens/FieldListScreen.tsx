@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, FlatList, TouchableOpacity, SafeAreaView, Modal
 import { showAlert } from '../utils/AlertUtility';
 import { Theme } from '../constants/Theme';
 import { useFields, Field } from '../hooks/useFields';
-import { useInventory } from '../hooks/useInventory';
+
 import { useLandlords } from '../hooks/useLandlords';
 import { useDatabase } from '../hooks/useDatabase';
 import { db } from '../db/powersync';
@@ -20,14 +20,13 @@ interface FieldListProps {
 export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListProps) => {
     const [search, setSearch] = useState('');
     const { fields, loading: fieldsLoading, addField } = useFields();
-    const { atRiskCount, loading: inventoryLoading } = useInventory();
     const { farmId } = useDatabase();
     const { width } = useWindowDimensions();
 
     const isDesktop = width > 768;
     const numColumns = isDesktop ? (width > 1200 ? 3 : 2) : 1;
 
-    const loading = fieldsLoading || inventoryLoading;
+    const loading = fieldsLoading;
     const [modalVisible, setModalVisible] = useState(false);
     const [actionPickerVisible, setActionPickerVisible] = useState(false);
     const [selectedField, setSelectedField] = useState<Field | null>(null);
@@ -107,8 +106,6 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
         }
     };
 
-
-
     const renderField = ({ item }: { item: Field }) => (
         <TouchableOpacity
             style={styles.fieldCard}
@@ -140,11 +137,6 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
                     </TouchableOpacity>
                 )}
             </View>
-            {atRiskCount > 0 && (
-                <View style={styles.alertBanner}>
-                    <Text style={styles.alertText}>⚠️ {atRiskCount} Products in Negative Balance (Ghost Inventory)</Text>
-                </View>
-            )}
 
             <FlatList
                 key={`${numColumns}`}
@@ -443,7 +435,7 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
                     </View>
                 </View>
             </Modal>
-        </SafeAreaView>
+        </SafeAreaView >
     );
 };
 

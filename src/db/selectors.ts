@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Field } from '../hooks/useFields';
 import { Bin } from '../hooks/useGrain';
 import { GrainLog } from '../hooks/useGrain';
-import { InventoryItem } from '../hooks/useInventory';
+
 import { Landlord, FieldSplit } from '../hooks/useLandlords';
 
 /**
@@ -34,14 +34,7 @@ export const useGrainSelectors = (bins: Bin[], logs: GrainLog[]) => {
     }, [bins, logs]);
 };
 
-export const useInventorySelectors = (inventory: InventoryItem[]) => {
-    return useMemo(() => {
-        return {
-            atRiskItems: inventory.filter(i => i.quantity_on_hand < 0),
-            totalStockValue: 0, // Placeholder for price integration later
-        };
-    }, [inventory]);
-};
+
 
 export const useComplianceSelectors = (logs: GrainLog[], shares: FieldSplit[], landlords: Landlord[]) => {
     return useMemo(() => {
