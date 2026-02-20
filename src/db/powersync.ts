@@ -6,10 +6,6 @@ import {
     PowerSyncBackendConnector,
     PowerSyncDatabaseOptionsWithSettings,
     type RequiredAdditionalConnectionOptions,
-    Schema,
-    Table,
-    Column,
-    ColumnType,
     SqliteBucketStorage
 } from '@powersync/common';
 import { Platform } from 'react-native';
@@ -18,6 +14,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { SQLJSOpenFactory } from '@powersync/adapter-sql-js';
 import Dexie, { type Table as DexieTable } from 'dexie';
 import { connector } from './SupabaseConnector';
+import { AppSchema } from './schema';
 
 let ReactNativeRemote: any;
 let ReactNativeStreamingSyncImplementation: any;
@@ -33,350 +30,6 @@ if (Platform.OS !== 'web') {
         console.warn('Native PowerSync modules not found');
     }
 }
-
-// 1. Define the Local Schema (matches Postgres projections)
-export const AppSchema = new Schema([
-    new Table({
-        name: 'farms',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'name', type: ColumnType.TEXT }),
-            new Column({ name: 'owner_id', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'invites',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'token', type: ColumnType.TEXT }),
-            new Column({ name: 'role', type: ColumnType.TEXT }),
-            new Column({ name: 'expires_at', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'fields',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'name', type: ColumnType.TEXT }),
-            new Column({ name: 'acreage', type: ColumnType.REAL }),
-            new Column({ name: 'last_gps_lat', type: ColumnType.REAL }),
-            new Column({ name: 'last_gps_long', type: ColumnType.REAL }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'recipes',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'name', type: ColumnType.TEXT }),
-            new Column({ name: 'product_name', type: ColumnType.TEXT }), // Legacy support
-            new Column({ name: 'epa_number', type: ColumnType.TEXT }),  // Legacy support
-            new Column({ name: 'rate_per_acre', type: ColumnType.REAL }), // Legacy support
-            new Column({ name: 'water_rate_per_acre', type: ColumnType.REAL }),
-            new Column({ name: 'phi_days', type: ColumnType.INTEGER }),
-            new Column({ name: 'rei_hours', type: ColumnType.INTEGER }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'recipe_items',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'recipe_id', type: ColumnType.TEXT }),
-            new Column({ name: 'product_name', type: ColumnType.TEXT }),
-            new Column({ name: 'epa_number', type: ColumnType.TEXT }),
-            new Column({ name: 'rate', type: ColumnType.REAL }),
-            new Column({ name: 'unit', type: ColumnType.TEXT }), // Gal, oz, lbs, pt, qt
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'seed_varieties',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'brand', type: ColumnType.TEXT }),
-            new Column({ name: 'variety_name', type: ColumnType.TEXT }),
-            new Column({ name: 'type', type: ColumnType.TEXT }),
-            new Column({ name: 'default_population', type: ColumnType.REAL }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'spray_logs',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'field_id', type: ColumnType.TEXT }),
-            new Column({ name: 'recipe_id', type: ColumnType.TEXT }),
-            new Column({ name: 'sprayed_at', type: ColumnType.TEXT }),
-            new Column({ name: 'weather_source', type: ColumnType.TEXT }),
-            new Column({ name: 'voided_at', type: ColumnType.TEXT }),
-            new Column({ name: 'void_reason', type: ColumnType.TEXT }),
-            new Column({ name: 'replaces_log_id', type: ColumnType.TEXT }),
-            new Column({ name: 'total_gallons', type: ColumnType.REAL }),
-            new Column({ name: 'total_product', type: ColumnType.REAL }),
-            new Column({ name: 'weather_temp', type: ColumnType.REAL }),
-            new Column({ name: 'weather_wind_speed', type: ColumnType.REAL }),
-            new Column({ name: 'weather_wind_dir', type: ColumnType.TEXT }),
-            new Column({ name: 'weather_humidity', type: ColumnType.REAL }),
-            new Column({ name: 'target_crop', type: ColumnType.TEXT }),
-            new Column({ name: 'target_pest', type: ColumnType.TEXT }),
-            new Column({ name: 'applicator_name', type: ColumnType.TEXT }),
-            new Column({ name: 'applicator_cert', type: ColumnType.TEXT }),
-            new Column({ name: 'acres_treated', type: ColumnType.REAL }),
-            new Column({ name: 'phi_days', type: ColumnType.INTEGER }),
-            new Column({ name: 'rei_hours', type: ColumnType.INTEGER }),
-            new Column({ name: 'notes', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-            new Column({ name: 'updated_at', type: ColumnType.TEXT }),
-            new Column({ name: 'start_time', type: ColumnType.TEXT }),
-            new Column({ name: 'end_time', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'spray_log_items',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'spray_log_id', type: ColumnType.TEXT }),
-            new Column({ name: 'product_name', type: ColumnType.TEXT }),
-            new Column({ name: 'epa_number', type: ColumnType.TEXT }),
-            new Column({ name: 'rate', type: ColumnType.REAL }),
-            new Column({ name: 'rate_unit', type: ColumnType.TEXT }),
-            new Column({ name: 'total_amount', type: ColumnType.REAL }),
-            new Column({ name: 'total_unit', type: ColumnType.TEXT }),
-            new Column({ name: 'sort_order', type: ColumnType.INTEGER }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-            new Column({ name: 'updated_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'planting_logs',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'field_id', type: ColumnType.TEXT }),
-            new Column({ name: 'seed_id', type: ColumnType.TEXT }),
-            new Column({ name: 'population', type: ColumnType.REAL }),
-            new Column({ name: 'depth', type: ColumnType.REAL }),
-            new Column({ name: 'start_time', type: ColumnType.TEXT }),
-            new Column({ name: 'end_time', type: ColumnType.TEXT }),
-            new Column({ name: 'notes', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'voided_at', type: ColumnType.TEXT }),
-            new Column({ name: 'void_reason', type: ColumnType.TEXT }),
-            new Column({ name: 'replaces_log_id', type: ColumnType.TEXT }),
-            new Column({ name: 'planted_at', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'bins',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'name', type: ColumnType.TEXT }),
-            new Column({ name: 'capacity', type: ColumnType.REAL }),
-            new Column({ name: 'crop_type', type: ColumnType.TEXT }),
-            new Column({ name: 'landlord_id', type: ColumnType.TEXT }),
-            new Column({ name: 'landlord_share_pct', type: ColumnType.REAL }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'grain_logs',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'type', type: ColumnType.TEXT }),
-            new Column({ name: 'field_id', type: ColumnType.TEXT }),
-            new Column({ name: 'bin_id', type: ColumnType.TEXT }),
-            new Column({ name: 'destination_type', type: ColumnType.TEXT }),
-            new Column({ name: 'destination_name', type: ColumnType.TEXT }),
-            new Column({ name: 'contract_id', type: ColumnType.TEXT }),
-            new Column({ name: 'bushels_net', type: ColumnType.REAL }),
-            new Column({ name: 'moisture', type: ColumnType.REAL }),
-            new Column({ name: 'start_time', type: ColumnType.TEXT }),
-            new Column({ name: 'end_time', type: ColumnType.TEXT }),
-            new Column({ name: 'notes', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'contracts',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'commodity', type: ColumnType.TEXT }),
-            new Column({ name: 'total_bushels', type: ColumnType.REAL }),
-            new Column({ name: 'price_per_bushel', type: ColumnType.REAL }),
-            new Column({ name: 'delivery_deadline', type: ColumnType.TEXT }),
-            new Column({ name: 'destination_name', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'farm_members',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'user_id', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'role', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'inventory',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'product_name', type: ColumnType.TEXT }),
-            new Column({ name: 'quantity_on_hand', type: ColumnType.REAL }),
-            new Column({ name: 'unit', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'settings',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_name', type: ColumnType.TEXT }),
-            new Column({ name: 'state', type: ColumnType.TEXT }),
-            new Column({ name: 'units', type: ColumnType.TEXT }),
-            new Column({ name: 'onboarding_completed', type: ColumnType.INTEGER }), // 0 or 1 for boolean
-            new Column({ name: 'default_applicator_name', type: ColumnType.TEXT }),
-            new Column({ name: 'default_applicator_cert', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'supabase_anon_key', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_join_token', type: ColumnType.TEXT }),
-            new Column({ name: 'updated_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'attachments',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'filename', type: ColumnType.TEXT }),
-            new Column({ name: 'type', type: ColumnType.TEXT }),
-            new Column({ name: 'size', type: ColumnType.INTEGER }),
-            new Column({ name: 'hash', type: ColumnType.TEXT }),
-            new Column({ name: 'owner_record_id', type: ColumnType.TEXT }),
-            new Column({ name: 'local_path', type: ColumnType.TEXT }),
-            new Column({ name: 'remote_url', type: ColumnType.TEXT }),
-            new Column({ name: 'status', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'audit_logs',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'action', type: ColumnType.TEXT }), // INSERT, UPDATE, DELETE
-            new Column({ name: 'table_name', type: ColumnType.TEXT }),
-            new Column({ name: 'record_id', type: ColumnType.TEXT }),
-            new Column({ name: 'changed_by', type: ColumnType.TEXT }),
-            new Column({ name: 'changes', type: ColumnType.TEXT }), // JSON string
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'landlords',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'name', type: ColumnType.TEXT }),
-            new Column({ name: 'email', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'landlord_shares',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'field_id', type: ColumnType.TEXT }),
-            new Column({ name: 'landlord_id', type: ColumnType.TEXT }),
-            new Column({ name: 'share_percentage', type: ColumnType.REAL }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'rent_agreements',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'landlord_id', type: ColumnType.TEXT }),
-            new Column({ name: 'crop_year', type: ColumnType.INTEGER }),
-            new Column({ name: 'rent_type', type: ColumnType.TEXT }),
-            new Column({ name: 'landlord_share_pct', type: ColumnType.REAL }),
-            new Column({ name: 'cash_rent_per_acre', type: ColumnType.REAL }),
-            new Column({ name: 'cash_rent_total', type: ColumnType.REAL }),
-            new Column({ name: 'split_basis', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-            new Column({ name: 'updated_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'agreement_fields',
-        columns: [
-            new Column({ name: 'agreement_id', type: ColumnType.TEXT }),
-            new Column({ name: 'field_id', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'grain_lots',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'crop_type', type: ColumnType.TEXT }),
-            new Column({ name: 'crop_year', type: ColumnType.INTEGER }),
-            new Column({ name: 'source_field_id', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-            new Column({ name: 'updated_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'lot_movements',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'lot_id', type: ColumnType.TEXT }),
-            new Column({ name: 'movement_type', type: ColumnType.TEXT }),
-            new Column({ name: 'bin_id', type: ColumnType.TEXT }),
-            new Column({ name: 'destination_name', type: ColumnType.TEXT }),
-            new Column({ name: 'bushels_net', type: ColumnType.REAL }),
-            new Column({ name: 'moisture', type: ColumnType.REAL }),
-            new Column({ name: 'test_weight', type: ColumnType.REAL }),
-            new Column({ name: 'occurred_at', type: ColumnType.TEXT }),
-            new Column({ name: 'note', type: ColumnType.TEXT }),
-            new Column({ name: 'source_grain_log_id', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-            new Column({ name: 'updated_at', type: ColumnType.TEXT }),
-        ],
-    }),
-    new Table({
-        name: 'inventory_adjustments',
-        columns: [
-            new Column({ name: 'id', type: ColumnType.TEXT }),
-            new Column({ name: 'farm_id', type: ColumnType.TEXT }),
-            new Column({ name: 'product_name', type: ColumnType.TEXT }),
-            new Column({ name: 'amount', type: ColumnType.REAL }),
-            new Column({ name: 'reason', type: ColumnType.TEXT }),
-            new Column({ name: 'reference_id', type: ColumnType.TEXT }),
-            new Column({ name: 'created_at', type: ColumnType.TEXT }),
-            new Column({ name: 'updated_at', type: ColumnType.TEXT }),
-        ],
-    }),
-]);
 
 const isWeb = Platform.OS === 'web';
 const isExpoGo = Constants.appOwnership === 'expo';
@@ -511,6 +164,13 @@ class ExpoPowerSyncDatabase extends AbstractPowerSyncDatabase {
         console.log('[PowerSync] Opening SQL.js DB Adapter');
         const factory = new SQLJSOpenFactory({
             ...options.database,
+            locateFile: (file: string) => {
+                if (file.endsWith('.wasm')) {
+                    // On web, we serve this at the root
+                    return '/sql-wasm.wasm';
+                }
+                return file;
+            },
             persister: isWeb ? WebIndexedDBPersister : MobileFilePersister
         } as any);
         return factory.openDB();
@@ -582,6 +242,11 @@ if (isWeb || isExpoGo) {
 }
 
 export const db = dbInstance;
+
+// Expose for E2E testing
+if (isWeb) {
+    (window as any).powersync = db;
+}
 
 // Start synchronization
 db.connect(connector).catch((e: any) => console.error('PowerSync connect error:', e));

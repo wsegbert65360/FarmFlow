@@ -12,7 +12,7 @@ import { useLandlords } from '../hooks/useLandlords';
 import { useSettings } from '../hooks/useSettings';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
-export type LogType = 'SPRAY' | 'PLANTING' | 'HARVEST' | 'DELIVERY';
+export type LogType = 'SPRAY' | 'PLANTING' | 'HARVEST' | 'DELIVERY' | 'ADJUSTMENT';
 
 interface LogSessionProps {
     type: LogType;

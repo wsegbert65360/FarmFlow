@@ -84,6 +84,7 @@ export const LoginScreen = () => {
                             autoCapitalize="none"
                             keyboardType="email-address"
                             editable={!loading}
+                            testID="login-email-input"
                         />
                     </View>
 
@@ -91,9 +92,10 @@ export const LoginScreen = () => {
                         style={[styles.loginButton, loading && { opacity: 0.7 }]}
                         onPress={handleLogin}
                         disabled={loading}
+                        testID="login-submit-button"
                     >
                         {loading ? (
-                            <ActivityIndicator color="#FFF" />
+                            <ActivityIndicator color="#FFF" testID="login-loading-indicator" />
                         ) : (
                             <Text style={styles.loginButtonText}>Send Magic Link</Text>
                         )}

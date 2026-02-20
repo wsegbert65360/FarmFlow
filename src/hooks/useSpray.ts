@@ -1,60 +1,15 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { db } from '../db/powersync';
 import { useDatabase } from './useDatabase';
 import { v4 as uuidv4 } from 'uuid';
-
-export interface RecipeItem {
-    id: string;
-    recipe_id: string;
-    product_name: string;
-    epa_number: string;
-    rate: number;
-    unit: string;
-}
-
-export interface Recipe {
-    id: string;
-    name: string;
-    water_rate_per_acre: number;
-    phi_days: number;
-    rei_hours: number;
-    items?: RecipeItem[];
-    // Legacy support fields for backward compatibility
-    product_name?: string;
-    rate_per_acre?: number;
-    epa_number?: string;
-}
-
-export interface SprayLog {
-    id: string;
-    field_id: string;
-    recipe_id: string;
-    sprayed_at: string;
-    weather_source: 'AUTO' | 'MANUAL';
-    voided_at: string | null;
-    void_reason: string | null;
-    replaces_log_id: string | null;
-    total_gallons: number | null;
-    total_product: number | null;
-    weather_temp: number | null;
-    weather_wind_speed: number | null;
-    weather_wind_dir: string | null;
-    weather_humidity: number | null;
-    target_crop: string | null;
-    target_pest: string | null;
-    applicator_name: string | null;
-    applicator_cert: string | null;
-    acres_treated: number | null;
-    phi_days: number | null;
-    rei_hours: number | null;
-    notes: string | null;
-}
+import { Recipe, SprayLog } from '../types/spray';
+import { SprayUtility } from '../utils/SprayUtility';
 
 export const useSpray = () => {
     const [recipes, setRecipes] = useState<Recipe[]>([]);
-    const [sprayLogs, setSprayLogs] = useState<any[]>([]);
+    const [sprayLogs, setSprayLogs] = useState<SprayLog[]>([]);
     const [loading, setLoading] = useState(true);
-    const { farmId, watchFarmQuery, insertFarmRow, updateFarmRow, deleteFarmRow } = useDatabase();
+    const { farmId, watchFarmQuery, insertFarmRow, bulkInsertFarmRows, updateFarmRow, deleteFarmRow } = useDatabase();
 
     useEffect(() => {
         if (!farmId) return;
@@ -72,39 +27,13 @@ export const useSpray = () => {
             {
                 onResult: (result: any) => {
                     const rows = result.rows?._array || [];
-                    const recipeMap: Record<string, Recipe> = {};
-
-                    rows.forEach((row: any) => {
-                        if (!recipeMap[row.id]) {
-                            recipeMap[row.id] = {
-                                id: row.id,
-                                name: row.name,
-                                water_rate_per_acre: row.water_rate_per_acre,
-                                phi_days: row.phi_days,
-                                rei_hours: row.rei_hours,
-                                items: []
-                            };
-                        }
-
-                        if (row.item_id) {
-                            recipeMap[row.id].items!.push({
-                                id: row.item_id,
-                                recipe_id: row.id,
-                                product_name: row.item_product_name,
-                                epa_number: row.item_epa_number,
-                                rate: row.item_rate,
-                                unit: row.item_unit
-                            });
-                        }
-                    });
-
-                    setRecipes(Object.values(recipeMap));
+                    setRecipes(SprayUtility.transformRecipeRows(rows));
                 },
                 onError: (e: any) => console.error('Failed to watch recipes', e)
             }
         );
 
-        // Watch spray logs with items joined (Phase 1 Reporting source)
+        // Watch spray logs with items joined
         watchFarmQuery(
             `SELECT sl.*, sli.id as item_id, sli.product_name as item_product_name, 
                     sli.epa_number as item_epa_number, sli.rate as item_rate, sli.rate_unit as item_unit,
@@ -117,26 +46,7 @@ export const useSpray = () => {
             {
                 onResult: (result: any) => {
                     const rows = result.rows?._array || [];
-                    const logMap: Record<string, any> = {};
-
-                    rows.forEach((row: any) => {
-                        if (!logMap[row.id]) {
-                            logMap[row.id] = { ...row, items: [] };
-                        }
-                        if (row.item_id) {
-                            logMap[row.id].items.push({
-                                id: row.item_id,
-                                spray_log_id: row.id,
-                                product_name: row.item_product_name,
-                                epa_number: row.item_epa_number,
-                                rate: row.item_rate,
-                                unit: row.item_unit,
-                                total_amount: row.item_total_amount,
-                                total_unit: row.item_total_unit
-                            });
-                        }
-                    });
-                    setSprayLogs(Object.values(logMap));
+                    setSprayLogs(SprayUtility.transformSprayLogRows(rows));
                 },
                 onError: (e: any) => console.error('Failed to watch spray logs', e)
             }
@@ -247,32 +157,32 @@ export const useSpray = () => {
             });
 
             // 2. Snapshot recipe items and update inventory
-            const selectedRecipe = recipes.find(r => r.id === params.recipeId);
+            const selectedRecipe = recipes.find((r: Recipe) => r.id === params.recipeId);
             if (selectedRecipe?.items && selectedRecipe.items.length > 0) {
-                for (const item of selectedRecipe.items) {
-                    const productName = item.product_name;
-                    const itemUsage = item.rate * (acresTreated || 0);
+                const itemRows = selectedRecipe.items.map(item => ({
+                    spray_log_id: id,
+                    product_name: item.product_name,
+                    epa_number: item.epa_number,
+                    rate: item.rate,
+                    rate_unit: item.unit,
+                    total_amount: (item.rate || 0) * (params.acresTreated || 0),
+                    total_unit: item.unit
+                }));
 
-                    // A. Snapshot Item
-                    await insertFarmRow('spray_log_items', {
-                        spray_log_id: id,
-                        product_name: productName,
-                        epa_number: item.epa_number,
-                        rate: item.rate,
-                        rate_unit: item.unit,
-                        total_amount: itemUsage,
-                        total_unit: item.unit
-                    });
+                await bulkInsertFarmRows('spray_log_items', itemRows);
 
-                    // B. Audit Adjustment (Deduction)
-                    await insertFarmRow('inventory_adjustments', {
-                        id: uuidv4(),
-                        product_name: productName,
-                        amount: -itemUsage, // Negative = deduction
-                        reason: replacesLogId ? 'LOG_CORRECTION' : 'LOG_CREATED',
-                        reference_id: id
-                    });
-                }
+                // Audit Adjustment (Deduction) for each item
+                const adjustmentRows = selectedRecipe.items.map(item => ({
+                    id: uuidv4(),
+                    product_name: item.product_name,
+                    amount: -(item.rate * (params.acresTreated || 0)), // Negative because it's a deduction
+                    unit: item.unit,
+                    source_type: 'SPRAY_LOG',
+                    source_id: id,
+                    notes: `App: ${params.applicatorName || 'N/A'}`
+                }));
+
+                await bulkInsertFarmRows('inventory_adjustments', adjustmentRows);
             } else if (selectedRecipe?.product_name) {
                 // FALLBACK for legacy recipes
                 const productName = selectedRecipe.product_name;

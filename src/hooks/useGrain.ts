@@ -56,7 +56,7 @@ export const useGrain = () => {
     const [bins, setBins] = useState<Bin[]>([]);
     const [grainLogs, setGrainLogs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const { farmId, watchFarmQuery, insertFarmRow, updateFarmRow, deleteFarmRow } = useDatabase();
+    const { farmId, watchFarmQuery, insertFarmRow, bulkInsertFarmRows, updateFarmRow, deleteFarmRow } = useDatabase();
 
     useEffect(() => {
         if (!farmId) return;
@@ -152,12 +152,13 @@ export const useGrain = () => {
                     [log.bin_id]
                 );
 
+                const movementRows = [];
                 for (const lot of lotBalances) {
                     if (remainingToAllocate <= 0) break;
 
                     const allocatedFromLot = Math.min(remainingToAllocate, lot.balance);
 
-                    await insertFarmRow('lot_movements', {
+                    movementRows.push({
                         lot_id: lot.lot_id,
                         movement_type: 'OUT_OF_BIN',
                         bin_id: log.bin_id,
@@ -168,6 +169,10 @@ export const useGrain = () => {
                     });
 
                     remainingToAllocate -= allocatedFromLot;
+                }
+
+                if (movementRows.length > 0) {
+                    await bulkInsertFarmRows('lot_movements', movementRows);
                 }
 
                 if (remainingToAllocate > 0.1) {

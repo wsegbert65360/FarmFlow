@@ -48,8 +48,7 @@ export class SupabaseConnector implements PowerSyncBackendConnector {
         if (!batch) return;
 
         // Get current farm_id for RLS safety if needed
-        const { db } = await import('./powersync');
-        const settingsRes = await db.execute('SELECT farm_id FROM settings WHERE id = ?', ['farm_config']);
+        const settingsRes = await database.execute('SELECT farm_id FROM settings WHERE id = ?', ['farm_config']);
         const currentFarmId = settingsRes.rows?._array[0]?.farm_id;
 
         try {

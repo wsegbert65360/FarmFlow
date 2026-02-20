@@ -3,7 +3,8 @@ import { StyleSheet, Text, View, FlatList, TouchableOpacity, Modal, TextInput, K
 import { showAlert, showConfirm, showDeleteConfirm } from '../utils/AlertUtility';
 import QRCode from 'react-native-qrcode-svg';
 import { Theme } from '../constants/Theme';
-import { useSpray, Recipe, RecipeItem } from '../hooks/useSpray';
+import { useSpray } from '../hooks/useSpray';
+import { Recipe, RecipeItem } from '../types/spray';
 import { usePlanting, SeedVariety } from '../hooks/usePlanting';
 import { useLandlords, Landlord } from '../hooks/useLandlords';
 import { useGrain } from '../hooks/useGrain';
@@ -14,7 +15,9 @@ import { lookupEPA, calculateMaxRestrictions } from '../utils/EPAUtility';
 import { connector } from '../db/SupabaseConnector';
 import { v4 as uuidv4 } from 'uuid';
 
-type VaultTab = 'CHEMICALS' | 'SEEDS' | 'LANDLORDS' | 'REPORTS' | 'SETTINGS';
+import { VaultTabNavigation, VaultTab } from '../components/vault/VaultTabNavigation';
+import { VaultCard } from '../components/vault/VaultCard';
+
 type VaultItem = Recipe | SeedVariety | Landlord;
 
 export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
@@ -70,7 +73,7 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
                 setWater(recipe.water_rate_per_acre.toString());
                 setPhi(recipe.phi_days?.toString() || '0');
                 setRei(recipe.rei_hours?.toString() || '0');
-                setRecipeItems(recipe.items?.map(i => ({
+                setRecipeItems(recipe.items?.map((i: RecipeItem) => ({
                     product_name: i.product_name,
                     epa_number: i.epa_number,
                     rate: i.rate,
@@ -213,33 +216,38 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
     };
 
     const renderRecipe = ({ item }: { item: Recipe }) => (
-        <TouchableOpacity style={[styles.card, isDesktop && { flex: 1 / numColumns - 0.05 }]} onPress={() => openModal(item)}>
-            <Text style={styles.cardTitle}>{item.name}</Text>
-            <Text style={styles.cardSub}>
-                {item.items && item.items.length > 0
-                    ? `${item.items.length} Products • ${item.water_rate_per_acre} Gal/ac`
-                    : `${item.product_name || 'No Products'} • ${item.rate_per_acre || 0} Gal/ac`}
-            </Text>
-        </TouchableOpacity>
+        <VaultCard
+            title={item.name}
+            subtitle={item.items && item.items.length > 0
+                ? `${item.items.length} Products • ${item.water_rate_per_acre} Gal/ac`
+                : `${item.product_name || 'No Products'} • ${item.rate_per_acre || 0} Gal/ac`}
+            onPress={() => openModal(item)}
+            numColumns={numColumns}
+        />
     );
 
     const renderSeed = ({ item }: { item: SeedVariety }) => (
-        <TouchableOpacity style={[styles.card, isDesktop && { flex: 1 / numColumns - 0.05 }]} onPress={() => openModal(item)}>
-            <Text style={styles.cardTitle}>{item.brand} {item.variety_name}</Text>
-            <Text style={styles.cardSub}>{item.default_population.toLocaleString()} plants/ac</Text>
-        </TouchableOpacity>
+        <VaultCard
+            title={`${item.brand} ${item.variety_name}`}
+            subtitle={`${item.default_population.toLocaleString()} plants/ac`}
+            onPress={() => openModal(item)}
+            numColumns={numColumns}
+        />
     );
 
     const renderLandlord = ({ item }: { item: Landlord }) => (
-        <TouchableOpacity style={[styles.card, isDesktop && { flex: 1 / numColumns - 0.05 }]} onPress={() => openModal(item as any)}>
-            <Text style={styles.cardTitle}>{item.name}</Text>
-            <Text style={styles.cardSub}>{item.email || 'No email'}</Text>
-        </TouchableOpacity>
+        <VaultCard
+            title={item.name}
+            subtitle={item.email || 'No email'}
+            onPress={() => openModal(item as any)}
+            numColumns={numColumns}
+        />
     );
 
     const renderReportAction = ({ item }: { item: { title: string; type: string; description: string } }) => (
-        <TouchableOpacity
-            style={[styles.card, { borderLeftWidth: 4, borderLeftColor: Theme.colors.secondary }]}
+        <VaultCard
+            title={item.title}
+            subtitle={item.description}
             onPress={async () => {
                 setSaving(true);
                 try {
@@ -251,10 +259,8 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
                             type: 'EPA_SPRAY'
                         });
                     } else if (item.type === 'LANDLORD_HARVEST') {
-                        // Prepare landlord data
                         const landlordData = landlords.map(l => {
                             const lShares = fieldSplits.filter(s => s.landlord_id === l.id);
-                            // Simplified: just taking first field share for demo or summing
                             return {
                                 fieldName: 'Multiple Fields',
                                 totalBushels: grainLogs.reduce((acc: number, g: any) => acc + g.bushels_net, 0),
@@ -271,51 +277,24 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
                     } else {
                         await generateDiagnosticReport();
                     }
-                    const msg = 'Report generated and ready to share.';
-                    showAlert('Success', msg);
+                    showAlert('Success', 'Report generated and ready to share.');
                 } catch (e) {
                     showAlert('Error', 'Failed to generate report');
                 } finally {
                     setSaving(false);
                 }
             }}
-        >
-            <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.cardSub}>{item.description}</Text>
-            <Text style={[styles.cardSub, { color: Theme.colors.secondary, fontWeight: 'bold', marginTop: 8 }]}>PDF EXPORT 📄</Text>
-        </TouchableOpacity>
+            numColumns={numColumns}
+            accentColor={Theme.colors.secondary}
+        />
     );
 
     return (
         <View style={styles.container}>
-            <View style={styles.tabContainer}>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'CHEMICALS' && styles.activeTab, activeTab === 'CHEMICALS' && { borderBottomColor: Theme.colors.primary }]}
-                    onPress={() => setActiveTab('CHEMICALS')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'CHEMICALS' && styles.activeTabText, activeTab === 'CHEMICALS' && { color: Theme.colors.primary }]}>Chemicals</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'SEEDS' && styles.activeTab, activeTab === 'SEEDS' && { borderBottomColor: Theme.colors.success }]}
-                    onPress={() => setActiveTab('SEEDS')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'SEEDS' && styles.activeTabText, activeTab === 'SEEDS' && { color: Theme.colors.success }]}>Seeds</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'LANDLORDS' && styles.activeTab, activeTab === 'LANDLORDS' && { borderBottomColor: Theme.colors.warning }]}
-                    onPress={() => setActiveTab('LANDLORDS')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'LANDLORDS' && styles.activeTabText, activeTab === 'LANDLORDS' && { color: Theme.colors.warning }]}>Landlords</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'SETTINGS' && styles.activeTab, activeTab === 'SETTINGS' && { borderBottomColor: Theme.colors.secondary }]}
-                    onPress={() => setActiveTab('SETTINGS')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'SETTINGS' && styles.activeTabText, activeTab === 'SETTINGS' && { color: Theme.colors.secondary }]}>Sync & Team</Text>
-                </TouchableOpacity>
-            </View>
+            <VaultTabNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
 
             <FlatList
+                testID="vault-list"
                 key={`${activeTab}-${numColumns}`}
                 data={(
                     activeTab === 'CHEMICALS' ? recipes :

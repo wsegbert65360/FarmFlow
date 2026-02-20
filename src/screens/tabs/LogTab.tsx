@@ -14,7 +14,7 @@ type SubView = 'MENU' | 'SELECT_FIELD_SPRAY' | 'SELECT_FIELD_PLANT' | 'SELECT_FI
 export const LogTab = ({ onLogAction }: LogTabProps) => {
     const [subView, setSubView] = useState<SubView>('MENU');
 
-    const handleFieldSelect = (field: Field, type: 'SPRAY' | 'PLANTING' | 'HARVEST' | 'DELIVERY', replacesLogId?: string) => {
+    const handleFieldSelect = (field: Field, type: 'SPRAY' | 'PLANTING' | 'HARVEST' | 'DELIVERY' | 'ADJUSTMENT', replacesLogId?: string) => {
         onLogAction({
             type,
             source: { id: field.id, name: field.name, acreage: field.acreage, type: 'FIELD' },

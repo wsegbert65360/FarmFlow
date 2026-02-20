@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../db/powersync';
 import { connector } from '../db/SupabaseConnector';
 import { useSettings } from './useSettings';
-import { insertFarmRow as rawInsert, watchFarmQuery as rawWatch, updateFarmRow as rawUpdate, deleteFarmRow as rawDelete } from '../utils/DatabaseUtility';
+import { insertFarmRow as rawInsert, bulkInsertFarmRows as rawBulkInsert, watchFarmQuery as rawWatch, updateFarmRow as rawUpdate, deleteFarmRow as rawDelete } from '../utils/DatabaseUtility';
 
 /**
  * useDatabase Hook
@@ -48,6 +48,10 @@ export const useDatabase = () => {
 
     return {
         insertFarmRow,
+        bulkInsertFarmRows: async (table: string, rowsData: any[]) => {
+            if (!farmId) throw new Error('[useDatabase] Cannot bulk insert: No active farm selected.');
+            return rawBulkInsert(db, table, rowsData, farmId, userId || undefined);
+        },
         updateFarmRow: async (table: string, id: string, data: any) => {
             if (!farmId) throw new Error('[useDatabase] Cannot update: No active farm selected.');
             return rawUpdate(db, table, id, data, farmId, userId || undefined);

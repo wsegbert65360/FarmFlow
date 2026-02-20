@@ -105,45 +105,7 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
         }
     };
 
-    const handleViewHistory = async () => {
-        if (!selectedField || !farmId) return;
-        setActionPickerVisible(false);
-        setHistoryModalVisible(true);
-        setLoadingHistory(true);
-        try {
-            const { sprayLogs, plantingLogs, grainLogs } = await fetchFieldSeasonalData(selectedField.id, farmId);
-            const allLogs = [
-                ...sprayLogs.map((l: any) => ({ ...l, type: 'SPRAY', date: l.sprayed_at || l.start_time })),
-                ...plantingLogs.map((l: any) => ({ ...l, type: 'PLANTING', date: l.start_time })),
-                ...grainLogs.map((l: any) => ({ ...l, type: 'HARVEST', date: l.end_time || l.start_time }))
-            ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            setHistoryLogs(allLogs);
-        } catch (e) {
-            showAlert('Error', 'Failed to load history');
-        } finally {
-            setLoadingHistory(false);
-        }
-    };
 
-    const handleViewHistory = async () => {
-        if (!selectedField || !farmId) return;
-        setActionPickerVisible(false);
-        setHistoryModalVisible(true);
-        setLoadingHistory(true);
-        try {
-            const { sprayLogs, plantingLogs, grainLogs } = await fetchFieldSeasonalData(selectedField.id, farmId);
-            const allLogs = [
-                ...sprayLogs.map((l: any) => ({ ...l, type: 'SPRAY', date: l.sprayed_at || l.start_time })),
-                ...plantingLogs.map((l: any) => ({ ...l, type: 'PLANTING', date: l.start_time })),
-                ...grainLogs.map((l: any) => ({ ...l, type: 'HARVEST', date: l.end_time || l.start_time }))
-            ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            setHistoryLogs(allLogs);
-        } catch (e) {
-            showAlert('Error', 'Failed to load history');
-        } finally {
-            setLoadingHistory(false);
-        }
-    };
 
     const renderField = ({ item }: { item: Field }) => (
         <TouchableOpacity style={styles.fieldCard} onPress={() => handleFieldPress(item)}>
@@ -401,102 +363,101 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
                 >
                     <Text style={[styles.actionButtonText, { color: Theme.colors.warning }]}>Manage splits</Text>
                 </TouchableOpacity>
-            </View>
-        </TouchableOpacity>
+
             </Modal >
 
-    {/* Add Field Modal */ }
-    < Modal visible = { modalVisible } transparent animationType = "slide" >
-        <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { height: '50%' }]}>
-                <Text style={styles.modalTitle}>New Field</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Field Name"
-                    value={newName}
-                    onChangeText={setNewName}
-                />
-                <TextInput
-                    style={styles.input}
-                    placeholder="Acreage"
-                    keyboardType="numeric"
-                    value={newAcreage}
-                    onChangeText={setNewAcreage}
-                />
-                <TouchableOpacity style={styles.saveButton} onPress={handleAddField}>
-                    <Text style={styles.saveButtonText}>Save Field</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => setModalVisible(false)} style={{ marginTop: 20 }}>
-                    <Text style={{ textAlign: 'center', color: Theme.colors.danger }}>Cancel</Text>
-                </TouchableOpacity>
-            </View>
-        </View>
-            </Modal >
-
-    {/* Manage Splits Modal */ }
-    < Modal visible = { splitsModalVisible } transparent animationType = "slide" >
-        <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { height: '70%' }]}>
-                <Text style={styles.modalTitle}>Splits: {selectedField?.name}</Text>
-
-                <View style={styles.splitList}>
-                    {shares.filter(s => s.field_id === selectedField?.id).map(share => {
-                        const landlord = landlords.find(l => l.id === share.landlord_id);
-                        return (
-                            <View key={share.id} style={styles.splitRow}>
-                                <Text style={{ flex: 1 }}>{landlord?.name || 'Unknown'}</Text>
-                                <Text style={{ fontWeight: 'bold' }}>{(share.share_percentage * 100).toFixed(0)}%</Text>
-                            </View>
-                        );
-                    })}
-                </View>
-
-                <Text style={styles.sectionLabel}>Add New Split</Text>
-                <View style={styles.splitForm}>
-                    <View style={{ flex: 1, marginRight: Theme.spacing.md }}>
-                        <Text style={styles.label}>Landlord</Text>
-                        <View style={styles.pickerPlaceholder}>
-                            {landlords.map(l => (
-                                <TouchableOpacity
-                                    key={l.id}
-                                    onPress={() => setSelectedLandlordId(l.id)}
-                                    style={[styles.miniCard, selectedLandlordId === l.id && styles.miniCardActive]}
-                                >
-                                    <Text style={selectedLandlordId === l.id && { color: Theme.colors.white }}>{l.name}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    </View>
-                    <View style={{ width: 80 }}>
-                        <Text style={styles.label}>Share %</Text>
+            {/* Add Field Modal */}
+            < Modal visible={modalVisible} transparent animationType="slide" >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { height: '50%' }]}>
+                        <Text style={styles.modalTitle}>New Field</Text>
                         <TextInput
-                            style={styles.miniInput}
-                            keyboardType="numeric"
-                            value={splitPercentage}
-                            onChangeText={setSplitPercentage}
+                            style={styles.input}
+                            placeholder="Field Name"
+                            value={newName}
+                            onChangeText={setNewName}
                         />
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Acreage"
+                            keyboardType="numeric"
+                            value={newAcreage}
+                            onChangeText={setNewAcreage}
+                        />
+                        <TouchableOpacity style={styles.saveButton} onPress={handleAddField}>
+                            <Text style={styles.saveButtonText}>Save Field</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setModalVisible(false)} style={{ marginTop: 20 }}>
+                            <Text style={{ textAlign: 'center', color: Theme.colors.danger }}>Cancel</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
+            </Modal >
 
-                <TouchableOpacity
-                    style={[styles.saveButton, { marginTop: Theme.spacing.lg }]}
-                    onPress={async () => {
-                        if (!selectedField || !selectedLandlordId) return;
-                        // Convention: share_percentage is stored as a decimal (e.g., 0.5 for 50%)
-                        await addFieldSplit(selectedField.id, selectedLandlordId, parseFloat(splitPercentage) / 100);
-                        setSplitPercentage('50');
-                        setSelectedLandlordId('');
-                        showAlert('Saved', 'Landlord share updated.');
-                    }}
-                >
-                    <Text style={styles.saveButtonText}>Add/Update Share</Text>
-                </TouchableOpacity>
+            {/* Manage Splits Modal */}
+            < Modal visible={splitsModalVisible} transparent animationType="slide" >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { height: '70%' }]}>
+                        <Text style={styles.modalTitle}>Splits: {selectedField?.name}</Text>
 
-                <TouchableOpacity onPress={() => setSplitsModalVisible(false)} style={{ marginTop: 20 }}>
-                    <Text style={{ textAlign: 'center', color: Theme.colors.textSecondary }}>Close</Text>
-                </TouchableOpacity>
-            </View>
-        </View>
+                        <View style={styles.splitList}>
+                            {shares.filter(s => s.field_id === selectedField?.id).map(share => {
+                                const landlord = landlords.find(l => l.id === share.landlord_id);
+                                return (
+                                    <View key={share.id} style={styles.splitRow}>
+                                        <Text style={{ flex: 1 }}>{landlord?.name || 'Unknown'}</Text>
+                                        <Text style={{ fontWeight: 'bold' }}>{(share.share_percentage * 100).toFixed(0)}%</Text>
+                                    </View>
+                                );
+                            })}
+                        </View>
+
+                        <Text style={styles.sectionLabel}>Add New Split</Text>
+                        <View style={styles.splitForm}>
+                            <View style={{ flex: 1, marginRight: Theme.spacing.md }}>
+                                <Text style={styles.label}>Landlord</Text>
+                                <View style={styles.pickerPlaceholder}>
+                                    {landlords.map(l => (
+                                        <TouchableOpacity
+                                            key={l.id}
+                                            onPress={() => setSelectedLandlordId(l.id)}
+                                            style={[styles.miniCard, selectedLandlordId === l.id && styles.miniCardActive]}
+                                        >
+                                            <Text style={selectedLandlordId === l.id && { color: Theme.colors.white }}>{l.name}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            </View>
+                            <View style={{ width: 80 }}>
+                                <Text style={styles.label}>Share %</Text>
+                                <TextInput
+                                    style={styles.miniInput}
+                                    keyboardType="numeric"
+                                    value={splitPercentage}
+                                    onChangeText={setSplitPercentage}
+                                />
+                            </View>
+                        </View>
+
+                        <TouchableOpacity
+                            style={[styles.saveButton, { marginTop: Theme.spacing.lg }]}
+                            onPress={async () => {
+                                if (!selectedField || !selectedLandlordId) return;
+                                // Convention: share_percentage is stored as a decimal (e.g., 0.5 for 50%)
+                                await addFieldSplit(selectedField.id, selectedLandlordId, parseFloat(splitPercentage) / 100);
+                                setSplitPercentage('50');
+                                setSelectedLandlordId('');
+                                showAlert('Saved', 'Landlord share updated.');
+                            }}
+                        >
+                            <Text style={styles.saveButtonText}>Add/Update Share</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity onPress={() => setSplitsModalVisible(false)} style={{ marginTop: 20 }}>
+                            <Text style={{ textAlign: 'center', color: Theme.colors.textSecondary }}>Close</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             </Modal >
         </SafeAreaView >
     );

@@ -81,6 +81,60 @@ export const insertFarmRow = async (
 };
 
 /**
+ * Inserts multiple rows into a farm-scoped table within a single transaction.
+ */
+export const bulkInsertFarmRows = async (
+    dbInstance: any,
+    table: string,
+    rowsData: any[],
+    farmId: string,
+    userId?: string
+) => {
+    if (!farmId) throw new Error('[DatabaseUtility] farmId is required for bulk insertion');
+    if (rowsData.length === 0) return [];
+
+    const results: string[] = [];
+
+    await dbInstance.writeTransaction(async (tx: any) => {
+        for (const data of rowsData) {
+            const id = data.id || uuidv4();
+            const record: any = {
+                ...data,
+                id,
+                farm_id: farmId,
+                created_at: data.created_at || new Date().toISOString()
+            };
+
+            if (userId && !record.user_id && table !== 'farms') {
+                record.user_id = userId;
+            }
+
+            const columns = Object.keys(record);
+            const placeholders = columns.map(() => '?').join(', ');
+            const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`;
+
+            await tx.execute(sql, columns.map((col: string) => record[col]));
+
+            // Auto-audit (using transaction context if possible, but recordAudit uses global db.execute)
+            // For now, let's keep auditing outside or pass tx to recordAudit
+            if (table !== 'audit_logs') {
+                await recordAudit({
+                    action: 'INSERT',
+                    tableName: table,
+                    recordId: id,
+                    farmId: farmId,
+                    changedBy: userId,
+                    changes: data
+                });
+            }
+            results.push(id);
+        }
+    });
+
+    return results;
+};
+
+/**
  * Updates a row in a farm-scoped table.
  * Enforces farm_id scoping.
  */

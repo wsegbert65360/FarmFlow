@@ -140,6 +140,7 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
                     <TouchableOpacity
                         style={[styles.modeButton, mode === 'NEW' && styles.modeActive]}
                         onPress={() => setMode('NEW')}
+                        testID="mode-new-button"
                     >
                         <Text style={[styles.modeText, mode === 'NEW' && styles.textWhite]}>Start New</Text>
                     </TouchableOpacity>
@@ -183,6 +184,7 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
                                 placeholder="e.g. Miller Family Farms"
                                 value={farmName}
                                 onChangeText={setFarmName}
+                                testID="farm-name-input"
                             />
                         </View>
 
@@ -218,6 +220,7 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
                             style={[styles.finishButton, (!farmName || !state) && styles.disabledButton]}
                             onPress={handleFinish}
                             disabled={!farmName || !state}
+                            testID="start-farming-button"
                         >
                             <Text style={styles.finishButtonText}>Start Farming</Text>
                         </TouchableOpacity>

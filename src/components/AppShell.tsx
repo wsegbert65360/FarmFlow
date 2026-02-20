@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, StatusBar, TouchableOpacity, Image, useWindowDimensions } from 'react-native';
 import { Theme } from '../constants/Theme';
 import { useSettings } from '../hooks/useSettings';
@@ -12,22 +12,24 @@ import { DashboardTab } from '../screens/tabs/DashboardTab';
 import { ManageTab } from '../screens/tabs/ManageTab';
 import { SettingsTab } from '../screens/tabs/SettingsTab';
 import { LogSessionScreen, LogType } from '../screens/LogSessionScreen';
-import { Modal, FlatList } from 'react-native';
 import { db } from '../db/powersync';
 import { useAuth } from '../hooks/useAuth';
 import { AuthContext } from '../context/AuthProvider';
+import { FarmSwitcherModal } from './modals/FarmSwitcherModal';
+import { TabBar, TabType } from './navigation/TabBar';
+import { ErrorBoundary } from './common/ErrorBoundary';
 
 export const AppShell = () => {
     const { settings } = useSettings();
 
     // New Tabs
-    const [activeTab, setActiveTab] = useState<'LOG' | 'HISTORY' | 'DASHBOARD' | 'MANAGE' | 'SETTINGS'>('LOG');
+    const [activeTab, setActiveTab] = useState<TabType>('LOG');
 
     // Farm Switcher
     const [showFarmSwitcher, setShowFarmSwitcher] = useState(false);
     const [myFarms, setMyFarms] = useState<{ id: string, name: string }[]>([]);
-    const { switchFarm } = useContext(AuthContext); // We need to import AuthContext
-    const { user } = useAuth(); // or from useAuth
+    const { switchFarm } = useContext(AuthContext);
+    const { user } = useAuth();
 
     useEffect(() => {
         if (showFarmSwitcher) {
@@ -41,10 +43,7 @@ export const AppShell = () => {
         setShowFarmSwitcher(false);
         if (farmId === settings?.farm_id) return;
         await switchFarm(farmId);
-        // Ideally trigger a context reload here.
-        // For MVP:
         alert("Switched farm. (Reloading...)");
-        // Force reload or navigation reset would happen here.
     };
 
     // Log Session Overlay managed here
@@ -112,7 +111,7 @@ export const AppShell = () => {
 
             <ResponsiveLayout
                 activeTab={activeTab}
-                setActiveTab={setActiveTab} // Note: Types might mismatch if ResponsiveLayout expects old tabs. I need to update ResponsiveLayout too or ignore typescript for now.
+                setActiveTab={setActiveTab}
                 onSyncPress={() => { }}
                 farmName={settings?.farm_name || 'FarmFlow'}
                 isConnected={true}
@@ -126,87 +125,25 @@ export const AppShell = () => {
                     />
                 )}
 
-                <View style={styles.content}>
-                    {renderContent()}
-                </View>
+                <ErrorBoundary>
+                    <View style={styles.mainContent}>
+                        {renderContent()}
+                    </View>
+                </ErrorBoundary>
             </ResponsiveLayout>
 
             {!isDesktop && (
-                <View style={styles.tabBar}>
-                    <TouchableOpacity
-                        style={[styles.tabItem, activeTab === 'LOG' && styles.activeTab]}
-                        onPress={() => setActiveTab('LOG')}
-                    >
-                        <Text style={[styles.tabIcon, activeTab === 'LOG' && styles.activeTabText]}>➕</Text>
-                        <Text style={[styles.tabText, activeTab === 'LOG' && styles.activeTabText]}>Log</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.tabItem, activeTab === 'HISTORY' && styles.activeTab]}
-                        onPress={() => setActiveTab('HISTORY')}
-                    >
-                        <Text style={[styles.tabIcon, activeTab === 'HISTORY' && styles.activeTabText]}>🕒</Text>
-                        <Text style={[styles.tabText, activeTab === 'HISTORY' && styles.activeTabText]}>History</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.tabItem, activeTab === 'DASHBOARD' && styles.activeTab]}
-                        onPress={() => setActiveTab('DASHBOARD')}
-                    >
-                        <Text style={[styles.tabIcon, activeTab === 'DASHBOARD' && styles.activeTabText]}>📊</Text>
-                        <Text style={[styles.tabText, activeTab === 'DASHBOARD' && styles.activeTabText]}>Dash</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.tabItem, activeTab === 'MANAGE' && styles.activeTab]}
-                        onPress={() => setActiveTab('MANAGE')}
-                    >
-                        <Text style={[styles.tabIcon, activeTab === 'MANAGE' && styles.activeTabText]}>⚙️</Text>
-                        <Text style={[styles.tabText, activeTab === 'MANAGE' && styles.activeTabText]}>Manage</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.tabItem, activeTab === 'SETTINGS' && styles.activeTab]}
-                        onPress={() => setActiveTab('SETTINGS')}
-                    >
-                        <Text style={[styles.tabIcon, activeTab === 'SETTINGS' && styles.activeTabText]}>👤</Text>
-                        <Text style={[styles.tabText, activeTab === 'SETTINGS' && styles.activeTabText]}>Profile</Text>
-                    </TouchableOpacity>
-                </View>
+                <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
             )}
-        </View>
-    )
-}
 
-<Modal
-    visible={showFarmSwitcher}
-    transparent={true}
-    animationType="fade"
-    onRequestClose={() => setShowFarmSwitcher(false)}
->
-    <TouchableOpacity
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={() => setShowFarmSwitcher(false)}
-    >
-        <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Switch Farm</Text>
-            <FlatList
-                data={myFarms}
-                keyExtractor={item => item.id}
-                renderItem={({ item }) => (
-                    <TouchableOpacity
-                        style={[styles.farmItem, item.id === settings?.farm_id && styles.activeFarmItem]}
-                        onPress={() => handleSwitchFarm(item.id)}
-                    >
-                        <Text style={[styles.farmName, item.id === settings?.farm_id && styles.activeFarmName]}>{item.name}</Text>
-                        {item.id === settings?.farm_id && <Text style={styles.activeCheck}>✓</Text>}
-                    </TouchableOpacity>
-                )}
+            <FarmSwitcherModal
+                visible={showFarmSwitcher}
+                onClose={() => setShowFarmSwitcher(false)}
+                myFarms={myFarms}
+                currentFarmId={settings?.farm_id}
+                onSwitchFarm={handleSwitchFarm}
             />
-            <TouchableOpacity style={styles.closeButton} onPress={() => setShowFarmSwitcher(false)}>
-                <Text style={styles.closeButtonText}>Cancel</Text>
-            </TouchableOpacity>
-        </View>
-    </TouchableOpacity>
-</Modal>
-        </SafeAreaView >
+        </SafeAreaView>
     );
 };
 
@@ -222,47 +159,5 @@ const styles = StyleSheet.create({
     headerTitle: { ...Theme.typography.h1, color: Theme.colors.white },
     headerSubtitle: { ...Theme.typography.caption, color: Theme.colors.whiteMuted },
     content: { flex: 1 },
-    tabBar: {
-        flexDirection: 'row',
-        height: 65,
-        backgroundColor: Theme.colors.white,
-        borderTopWidth: 1,
-        borderTopColor: Theme.colors.border,
-        paddingBottom: 5,
-    },
-    tabItem: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    activeTab: { borderTopWidth: 3, borderTopColor: Theme.colors.primary },
-    tabIcon: { fontSize: 20, marginBottom: 2 },
-    tabText: { ...Theme.typography.caption, fontWeight: 'bold' },
-    activeTabText: { color: Theme.colors.primary },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        padding: Theme.spacing.lg
-    },
-    modalContent: {
-        backgroundColor: Theme.colors.background,
-        borderRadius: 12,
-        padding: Theme.spacing.lg,
-        maxHeight: '60%'
-    },
-    modalTitle: { ...Theme.typography.h2, marginBottom: Theme.spacing.md },
-    farmItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        padding: Theme.spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: Theme.colors.border
-    },
-    activeFarmItem: { backgroundColor: Theme.colors.surface },
-    farmName: { ...Theme.typography.body },
-    activeFarmName: { fontWeight: 'bold', color: Theme.colors.primary },
-    activeCheck: { color: Theme.colors.primary, fontWeight: 'bold' },
-    closeButton: {
-        marginTop: Theme.spacing.md,
-        alignItems: 'center',
-        padding: Theme.spacing.md
-    },
-    closeButtonText: { color: Theme.colors.textSecondary }
+    mainContent: { flex: 1 },
 });
