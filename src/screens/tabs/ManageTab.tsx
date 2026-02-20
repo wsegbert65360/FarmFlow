@@ -48,21 +48,22 @@ export const ManageTab = () => {
         <ScrollView style={styles.container} contentContainerStyle={styles.content}>
             <Text style={styles.header}>Manage Farm</Text>
 
-            <MenuButton title="Fields" icon="🚜" onPress={() => setView('FIELDS')} subtitle="Add, Edit, Splits" />
-            <MenuButton title="Bins & Contracts" icon="🏭" onPress={() => setView('BINS_CONTRACTS')} subtitle="Inventory, Sales" />
-            <MenuButton title="Vault" icon="🧪" onPress={() => setView('VAULT')} subtitle="Chemicals, Seeds, Landlords" />
-            <MenuButton title="Reports" icon="📊" onPress={() => setView('REPORTS')} subtitle="Cost Analysis, Packets" />
+            <MenuButton title="Fields" icon="🚜" onPress={() => setView('FIELDS')} subtitle="Add, Edit, Splits" testID="manage-fields-btn" />
+            <MenuButton title="Bins & Contracts" icon="🏭" onPress={() => setView('BINS_CONTRACTS')} subtitle="Inventory, Sales" testID="manage-bins-btn" />
+            <MenuButton title="Vault" icon="🧪" onPress={() => setView('VAULT')} subtitle="Chemicals, Seeds, Landlords" testID="manage-vault-btn" />
+            <MenuButton title="Reports" icon="📊" onPress={() => setView('REPORTS')} subtitle="Cost Analysis, Packets" testID="manage-reports-btn" />
             <MenuButton title="Agreements" icon="🤝" onPress={() => { }} subtitle="Coming Soon" disabled />
 
         </ScrollView>
     );
 };
 
-const MenuButton = ({ title, icon, onPress, subtitle, disabled }: { title: string, icon: string, onPress: () => void, subtitle: string, disabled?: boolean }) => (
+const MenuButton = ({ title, icon, onPress, subtitle, disabled, testID }: { title: string, icon: string, onPress: () => void, subtitle: string, disabled?: boolean, testID?: string }) => (
     <TouchableOpacity
         style={[styles.menuButton, disabled && { opacity: 0.6 }]}
         onPress={onPress}
         disabled={disabled}
+        testID={testID}
     >
         <Text style={styles.icon}>{icon}</Text>
         <View>

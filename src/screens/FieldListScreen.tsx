@@ -3,6 +3,7 @@ import { StyleSheet, Text, View, FlatList, TouchableOpacity, SafeAreaView, Modal
 import { showAlert } from '../utils/AlertUtility';
 import { Theme } from '../constants/Theme';
 import { useFields, Field } from '../hooks/useFields';
+import { parseNumericInput } from '../utils/NumberUtility';
 
 import { useLandlords } from '../hooks/useLandlords';
 import { useDatabase } from '../hooks/useDatabase';
@@ -71,7 +72,7 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
     const handleAddField = async () => {
         if (!newName || !newAcreage) return;
         try {
-            await addField(newName, parseFloat(newAcreage));
+            await addField(newName, parseNumericInput(newAcreage));
             setNewName('');
             setNewAcreage('');
             setModalVisible(false);
@@ -420,7 +421,7 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
                             onPress={async () => {
                                 if (!selectedField || !selectedLandlordId) return;
                                 // Convention: share_percentage is stored as a decimal (e.g., 0.5 for 50%)
-                                await addFieldSplit(selectedField.id, selectedLandlordId, parseFloat(splitPercentage) / 100);
+                                await addFieldSplit(selectedField.id, selectedLandlordId, parseNumericInput(splitPercentage) / 100);
                                 setSplitPercentage('50');
                                 setSelectedLandlordId('');
                                 showAlert('Saved', 'Landlord share updated.');
@@ -515,19 +516,6 @@ const styles = StyleSheet.create({
     },
     saveButton: { backgroundColor: Theme.colors.primary, padding: Theme.spacing.lg, borderRadius: Theme.borderRadius.md, alignItems: 'center' },
     saveButtonText: { color: '#FFF', fontWeight: 'bold', fontSize: 18 },
-    alertBanner: {
-        backgroundColor: Theme.colors.danger,
-        padding: Theme.spacing.md,
-        marginHorizontal: Theme.spacing.md,
-        borderRadius: Theme.borderRadius.sm,
-        marginBottom: Theme.spacing.sm,
-    },
-    alertText: {
-        color: '#FFF',
-        fontWeight: 'bold',
-        textAlign: 'center',
-        fontSize: 14,
-    },
     actionSheet: {
         backgroundColor: '#FFF',
         padding: Theme.spacing.xl,

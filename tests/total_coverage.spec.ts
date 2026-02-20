@@ -159,7 +159,15 @@ test.describe('Total Coverage Stress Test', () => {
         console.log('\n--- Starting Form Stress Test ---');
 
         // Navigate to a known form view (Fields Management)
-        await page.getByTestId('tab-MANAGE').click();
+        const manageTab = page.getByTestId('tab-MANAGE');
+        const moreTab = page.getByTestId('tab-MORE');
+
+        if (await manageTab.isVisible()) {
+            await manageTab.click();
+        } else {
+            await moreTab.click();
+            await page.getByTestId('more-manage-btn').click();
+        }
         await page.waitForTimeout(500);
 
         const addFieldBtn = page.getByText('Add Field').first();

@@ -11,6 +11,7 @@ import { useContracts, Contract } from '../hooks/useContracts';
 import { fetchCurrentWeather, WeatherData } from '../utils/WeatherUtility';
 import { useLandlords } from '../hooks/useLandlords';
 import { useSettings } from '../hooks/useSettings';
+import { parseNumericInput } from '../utils/NumberUtility';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 export type LogType = 'SPRAY' | 'PLANTING' | 'HARVEST' | 'DELIVERY' | 'ADJUSTMENT';
@@ -151,7 +152,7 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
         if (type !== 'SPRAY') return;
 
         // Wind Check
-        const w = parseFloat(wind);
+        const w = parseNumericInput(wind);
         if (isNaN(w) || w <= 0) {
             setWindWarning(true);
         } else {
@@ -159,7 +160,7 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
         }
 
         // Acreage Check
-        const ac = parseFloat(inputAcreage);
+        const ac = parseNumericInput(inputAcreage);
         if (fixedAcreage && !isNaN(ac)) {
             const diff = Math.abs(ac - fixedAcreage);
             const pct = diff / fixedAcreage;
@@ -238,7 +239,7 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
         try {
             // ... (rest of logic same until success)
             if (type === 'SPRAY') {
-                const finalAcres = parseFloat(inputAcreage);
+                const finalAcres = parseNumericInput(inputAcreage);
                 if (isNaN(finalAcres) || finalAcres <= 0) throw new Error('Valid acreage required');
 
                 const selectedRecipe = recipes.find(r => r.id === selectedItemId);
@@ -250,10 +251,10 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                     totalGallons: (selectedRecipe?.water_rate_per_acre || 0) * finalAcres,
                     totalProduct: totalChemicalVolume * finalAcres,
                     weather: {
-                        temp: parseFloat(temp),
-                        windSpeed: parseFloat(wind),
+                        temp: parseNumericInput(temp),
+                        windSpeed: parseNumericInput(wind),
                         windDir: windDir,
-                        humidity: parseFloat(humidity)
+                        humidity: parseNumericInput(humidity)
                     },
                     weatherSource: weatherSource,
                     targetCrop,
@@ -272,8 +273,8 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                 await addPlantingLog({
                     fieldId: fixedId,
                     seedId: selectedItemId!,
-                    population: parseFloat(population),
-                    depth: parseFloat(depth),
+                    population: parseNumericInput(population),
+                    depth: parseNumericInput(depth),
                     notes: notes,
                     plantedAt: sprayedAt.toISOString(),
                     replacesLogId: replacesLogId || undefined,
@@ -288,8 +289,8 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                     bin_id: binId,
                     destination_type: 'BIN',
                     destination_name: 'On-Farm Storage',
-                    bushels_net: parseFloat(bushels) || 0,
-                    moisture: parseFloat(moisture) || 15.0,
+                    bushels_net: parseNumericInput(bushels) || 0,
+                    moisture: parseNumericInput(moisture) || 15.0,
                     notes: notes,
                     end_time: new Date().toISOString()
                 });
@@ -302,8 +303,8 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                     destination_type: 'ELEVATOR',
                     destination_name: contract?.destination_name || 'Direct Sale',
                     contract_id: contract?.id,
-                    bushels_net: parseFloat(bushels) || 0,
-                    moisture: parseFloat(moisture) || 15.0,
+                    bushels_net: parseNumericInput(bushels) || 0,
+                    moisture: parseNumericInput(moisture) || 15.0,
                     notes: notes,
                     end_time: new Date().toISOString()
                 });

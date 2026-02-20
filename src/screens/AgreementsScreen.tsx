@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, Modal, TextInput, SafeAreaView, ScrollView, useWindowDimensions } from 'react-native';
 import { showAlert } from '../utils/AlertUtility';
 import { Theme } from '../constants/Theme';
+import { parseNumericInput } from '../utils/NumberUtility';
 import { useLandlords, Landlord } from '../hooks/useLandlords';
 import { useAgreements, RentAgreement } from '../hooks/useAgreements';
 import { useFields } from '../hooks/useFields';
@@ -201,14 +202,14 @@ export const AgreementsScreen = () => {
                                     style={styles.input}
                                     keyboardType="numeric"
                                     placeholder="250.00"
-                                    onChangeText={text => setNewAgreement(prev => ({ ...prev, cash_rent_per_acre: parseFloat(text) }))}
+                                    onChangeText={text => setNewAgreement(prev => ({ ...prev, cash_rent_per_acre: parseNumericInput(text) }))}
                                 />
                                 <Text style={styles.label}>Total Cash Rent (Optional)</Text>
                                 <TextInput
                                     style={styles.input}
                                     keyboardType="numeric"
                                     placeholder="Total amount"
-                                    onChangeText={text => setNewAgreement(prev => ({ ...prev, cash_rent_total: parseFloat(text) }))}
+                                    onChangeText={text => setNewAgreement(prev => ({ ...prev, cash_rent_total: parseNumericInput(text) }))}
                                 />
                             </View>
                         ) : (
@@ -218,7 +219,7 @@ export const AgreementsScreen = () => {
                                     style={styles.input}
                                     keyboardType="numeric"
                                     placeholder="50"
-                                    onChangeText={text => setNewAgreement(prev => ({ ...prev, landlord_share_pct: parseFloat(text) / 100 }))}
+                                    onChangeText={text => setNewAgreement(prev => ({ ...prev, landlord_share_pct: parseNumericInput(text) / 100 }))}
                                 />
                                 <Text style={styles.label}>Split Basis</Text>
                                 <View style={styles.typeSelector}>

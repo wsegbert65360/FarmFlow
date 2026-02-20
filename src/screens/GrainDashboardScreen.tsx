@@ -4,6 +4,7 @@ import { showAlert, showConfirm, showDeleteConfirm } from '../utils/AlertUtility
 import { Theme } from '../constants/Theme';
 import { useGrain, Bin } from '../hooks/useGrain';
 import { useContracts, Contract } from '../hooks/useContracts';
+import { parseNumericInput } from '../utils/NumberUtility';
 import { useLandlords, Landlord } from '../hooks/useLandlords';
 
 interface GrainDashboardProps {
@@ -96,9 +97,9 @@ export const GrainDashboardScreen = ({ onSelectAction, mode = 'MANAGE' }: GrainD
         setSaving(true);
         try {
             if (editingItem) {
-                await updateBin(editingItem.id, name, parseFloat(capacity) || 0, cropType, selectedLandlordId, parseFloat(sharePct) || null);
+                await updateBin(editingItem.id, name, parseNumericInput(capacity) || 0, cropType, selectedLandlordId, parseNumericInput(sharePct) || null);
             } else {
-                await createBin(name, parseFloat(capacity) || 0, cropType, selectedLandlordId, parseFloat(sharePct) || null);
+                await createBin(name, parseNumericInput(capacity) || 0, cropType, selectedLandlordId, parseNumericInput(sharePct) || null);
             }
             setBinModalVisible(false);
         } catch (e: any) {
@@ -178,11 +179,14 @@ export const GrainDashboardScreen = ({ onSelectAction, mode = 'MANAGE' }: GrainD
         Keyboard.dismiss();
         setSaving(true);
         try {
+            const bushels = parseNumericInput(totalBushels);
+            const p = parseNumericInput(price);
+
             const contractData = {
                 destination_name: destination,
                 commodity,
-                total_bushels: parseFloat(totalBushels),
-                price_per_bushel: parseFloat(price) || 0,
+                total_bushels: bushels,
+                price_per_bushel: p || 0,
                 delivery_deadline: deadline
             };
 

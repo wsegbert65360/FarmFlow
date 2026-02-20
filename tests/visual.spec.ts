@@ -1,18 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-
-async function mockLogin(page: Page) {
-    const projectId = 'skkbmmxjclpbbijcrgyi';
-    const mockSession = {
-        access_token: 'mock-token',
-        refresh_token: 'mock-refresh',
-        expires_at: Math.floor(Date.now() / 1000) + 3600,
-        user: { id: 'mock-user-id', email: 'test@example.com' },
-    };
-
-    await page.addInitScript((data) => {
-        window.localStorage.setItem(`sb-${data.projectId}-auth-token`, JSON.stringify(data.session));
-    }, { projectId, session: mockSession });
-}
+import { mockLogin, mockFarm } from './auth_mock_helper';
 
 test.describe('Visual Regression', () => {
     test.beforeEach(async ({ page }) => {
@@ -21,12 +8,39 @@ test.describe('Visual Regression', () => {
 
     test('Dashboard responsive design', async ({ page }) => {
         await page.goto('/');
+        await mockFarm(page);
         // Capture snapshot for comparison
         await expect(page).toHaveScreenshot('dashboard.png');
     });
 
     test('Vault list responsiveness', async ({ page }) => {
-        await page.goto('/vault');
+        await page.goto('/');
+        await mockFarm(page);
+
+        // Navigate to Vault (Responsive)
+        const moreTab = page.getByTestId('tab-MORE');
+        const manageTab = page.getByTestId('tab-MANAGE');
+
+        // Wait for layout to settle
+        await Promise.race([
+            moreTab.waitFor({ state: 'visible', timeout: 10000 }).catch(() => { }),
+            manageTab.waitFor({ state: 'visible', timeout: 10000 }).catch(() => { })
+        ]);
+
+        if (await moreTab.isVisible()) {
+            await moreTab.click({ force: true });
+            await expect(page.getByTestId('more-manage-btn')).toBeVisible({ timeout: 10000 });
+            await page.getByTestId('more-manage-btn').click({ force: true });
+        } else {
+            await expect(manageTab).toBeVisible({ timeout: 10000 });
+            await manageTab.click({ force: true });
+        }
+
+        await expect(page.getByTestId('manage-vault-btn')).toBeVisible({ timeout: 10000 });
+        await page.getByTestId('manage-vault-btn').click({ force: true });
+        await expect(page.getByTestId('vault-list')).toBeVisible();
+        await page.waitForTimeout(1000); // Allow Safari to render/animate
+
         await expect(page).toHaveScreenshot('vault-list.png');
     });
 });

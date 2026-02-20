@@ -12,6 +12,7 @@ import { useGrain } from '../hooks/useGrain';
 import { generateReport } from '../utils/ReportUtility';
 import { generateDiagnosticReport } from '../utils/DiagnosticUtility';
 import { useSettings } from '../hooks/useSettings';
+import { parseNumericInput, parseIntegerInput } from '../utils/NumberUtility';
 import { lookupEPA, calculateMaxRestrictions } from '../utils/EPAUtility';
 import { connector } from '../db/SupabaseConnector';
 import { v4 as uuidv4 } from 'uuid';
@@ -180,9 +181,9 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
             if (activeTab === 'CHEMICALS') {
                 const data = {
                     name,
-                    water_rate_per_acre: parseFloat(water) || 0,
-                    phi_days: parseInt(phi) || 0,
-                    rei_hours: parseInt(rei) || 0,
+                    water_rate_per_acre: parseNumericInput(water) || 0,
+                    phi_days: parseIntegerInput(phi) || 0,
+                    rei_hours: parseIntegerInput(rei) || 0,
                     items: recipeItems as RecipeItem[]
                 };
                 if (editingItem) await updateRecipe(editingItem.id, data);
@@ -192,7 +193,7 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
                     brand,
                     variety_name: name,
                     type: 'Seed',
-                    default_population: parseInt(population) || 32000,
+                    default_population: parseIntegerInput(population) || 32000,
                 };
                 if (editingItem) await updateSeed(editingItem.id, data);
                 else await addSeed(data);
@@ -478,7 +479,7 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
                                                 keyboardType="numeric"
                                                 onChangeText={(v) => {
                                                     const newItems = [...recipeItems];
-                                                    newItems[index].rate = parseFloat(v) || 0;
+                                                    newItems[index].rate = parseNumericInput(v) || 0;
                                                     setRecipeItems(newItems);
                                                 }}
                                             />
