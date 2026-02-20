@@ -4,6 +4,7 @@ rd /s /q dist 2>nul
 mkdir dist
 
 echo [FarmFlow] 1. Generating Production Web Build...
+set CI=1
 call npx -y expo export --platform web --clear
 if %errorlevel% neq 0 (
     echo [ERROR] Web export failed at step 1.
