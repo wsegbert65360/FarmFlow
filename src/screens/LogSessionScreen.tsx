@@ -438,7 +438,7 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                             </View>
                         )}
                     </View>
-                    {acreageWarning && <Text style={[styles.warningText, { textAlign: 'right', marginBottom: 5 }]}>⚠️ Variance > 20%</Text>}
+                    {acreageWarning && <Text style={[styles.warningText, { textAlign: 'right', marginBottom: 5 }]}>⚠️ Variance {'>'} 20%</Text>}
 
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
                         {items.map((item) => {

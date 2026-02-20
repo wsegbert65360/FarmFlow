@@ -329,7 +329,7 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
                                             <Text style={styles.logDetail}>{item.brand} {item.variety_name}</Text>
                                         )}
                                         {item.type === 'HARVEST' && (
-                                            <Text style={styles.logDetail}>{item.bushels_net} bu -> {item.bin_name || 'Elevator'}</Text>
+                                            <Text style={styles.logDetail}>{item.bushels_net} bu {'->'} {item.bin_name || 'Elevator'}</Text>
                                         )}
                                         {item.voided_at && (
                                             <Text style={{ color: Theme.colors.danger, fontSize: 10, marginTop: 4 }}>Reason: {item.void_reason}</Text>
