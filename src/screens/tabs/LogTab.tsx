@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Theme } from '../../constants/Theme';
+import { showAlert } from '../../utils/AlertUtility';
 import { FieldListScreen } from '../FieldListScreen';
 import { GrainDashboardScreen } from '../GrainDashboardScreen';
 import { Field } from '../../hooks/useFields';
@@ -85,30 +86,35 @@ export const LogTab = ({ onLogAction }: LogTabProps) => {
                     icon="🚿"
                     color="#0288D1"
                     onPress={() => setSubView('SELECT_FIELD_SPRAY')}
+                    testID="log-action-spray"
                 />
                 <ActionButton
                     title="Planting"
                     icon="🌱"
                     color="#2E7D32"
                     onPress={() => setSubView('SELECT_FIELD_PLANT')}
+                    testID="log-action-planting"
                 />
                 <ActionButton
                     title="Harvest / Load"
                     icon="🚜"
                     color="#F57C00"
                     onPress={() => setSubView('SELECT_FIELD_HARVEST')}
+                    testID="log-action-harvest"
                 />
                 <ActionButton
                     title="Bin → Town"
                     icon="🚛"
                     color="#7B1FA2"
                     onPress={() => setSubView('SELECT_BIN_DELIVERY')}
+                    testID="log-action-delivery"
                 />
                 <ActionButton
                     title="Settlement"
                     icon="💰"
                     color="#455A64"
-                    onPress={() => { /* TODO: Implement Settlement */ }}
+                    onPress={() => showAlert('Coming Soon', 'Settlement and Financial logging is coming in the next update!')}
+                    testID="log-action-settlement"
                 />
             </View>
 
@@ -121,8 +127,8 @@ export const LogTab = ({ onLogAction }: LogTabProps) => {
     );
 };
 
-const ActionButton = ({ title, icon, color, onPress }: { title: string, icon: string, color: string, onPress: () => void }) => (
-    <TouchableOpacity style={[styles.button, { backgroundColor: color }]} onPress={onPress}>
+const ActionButton = ({ title, icon, color, onPress, testID }: { title: string, icon: string, color: string, onPress: () => void, testID?: string }) => (
+    <TouchableOpacity style={[styles.button, { backgroundColor: color }]} onPress={onPress} testID={testID}>
         <Text style={styles.buttonIcon}>{icon}</Text>
         <Text style={styles.buttonText}>{title}</Text>
     </TouchableOpacity>

@@ -11,7 +11,7 @@ export default defineConfig({
     workers: process.env.CI ? 1 : undefined,
     reporter: 'html',
     use: {
-        baseURL: 'http://localhost:8082',
+        baseURL: 'http://localhost:8084',
         trace: 'on-first-retry',
     },
 
@@ -32,9 +32,9 @@ export default defineConfig({
 
     /* Run local dev server before starting tests */
     webServer: {
-        command: 'npx cross-env CI=1 npx expo start --web --port 8082',
-        url: 'http://localhost:8082',
-        reuseExistingServer: !process.env.CI,
+        command: 'npx serve dist -l 8084',
+        url: 'http://localhost:8084',
+        reuseExistingServer: true,
         timeout: 120 * 1000,
     },
 });

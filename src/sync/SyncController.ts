@@ -39,7 +39,7 @@ class SyncController {
 
         // Listen to PowerSync status
         this.dbUnsubscribe = db.registerListener({
-            statusChanged: (status) => {
+            statusChanged: (status: any) => {
                 this.updateState({
                     lastSyncedAt: status.lastSyncedAt || this.state.lastSyncedAt,
                     lastError: status.uploadError?.message || status.downloadError?.message || null,

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator, Platform, TextInput, ScrollView, Switch, Alert } from 'react-native';
 import { showAlert } from '../utils/AlertUtility';
 import { Theme } from '../constants/Theme';
-import { useSpray, Recipe } from '../hooks/useSpray';
+import { useSpray } from '../hooks/useSpray';
+import { Recipe } from '../types/spray';
 import { usePlanting, SeedVariety } from '../hooks/usePlanting';
 import { useGrain, Bin } from '../hooks/useGrain';
 import { useFields, Field } from '../hooks/useFields';
@@ -45,6 +46,7 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
     const [moisture, setMoisture] = useState('15.0');
     const [notes, setNotes] = useState('');
     const [saving, setSaving] = useState(false);
+    const [showSuccess, setShowSuccess] = useState(false);
 
     // TIME Control
     const [sprayedAt, setSprayedAt] = useState(new Date());
@@ -79,7 +81,13 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
     useEffect(() => {
         // Initial setup for spray
         if (type === 'SPRAY') {
-            loadWeather();
+            loadWeather().catch(e => console.error('[LogSession] Weather load failed:', e));
+        }
+    }, [type]);
+
+    useEffect(() => {
+        // Initial setup for spray (non-weather related)
+        if (type === 'SPRAY') {
             if (settings) {
                 setApplicatorName(settings.default_applicator_name || '');
                 setApplicatorCert(settings.default_applicator_cert || '');
@@ -197,40 +205,43 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
         }
     };
 
-    const [showSuccess, setShowSuccess] = useState(false);
+    const [isReusing, setIsReusing] = useState(false);
 
     useEffect(() => {
         if (showSuccess) {
             const timer = setTimeout(() => {
-                onClose();
-            }, 1000); // Faster close
+                if (isReusing) {
+                    // Reset for next entry
+                    setShowSuccess(false);
+                    setBushels('');
+                    setNotes('');
+                    // Keep acreage? Usually yes for same field, but maybe clear it to be safe?
+                    // Let's keep acreage/recipe context as that's the point of reuse.
+                    // But if it's Harvest, we clear bushels.
+                    setIsReusing(false);
+                } else {
+                    onClose();
+                }
+            }, 1500);
             return () => clearTimeout(timer);
         }
-    }, [showSuccess]);
+    }, [showSuccess, isReusing]);
 
-    const handleLog = async () => {
+    const handleLog = async (reuse = false) => {
         if (!selectedItemId && type !== 'DELIVERY' && type !== 'HARVEST') {
             showAlert('Selection Required', 'Please select an item to continue.');
             return;
         }
 
-        // CONFIRMATION for Guardrails (Non-blocking but explicit)
-        if (type === 'SPRAY' && (windWarning || acreageWarning)) {
-            // In a real native app, we might show a native Alert.alert with "Proceed" option.
-            // For now, we will trust the visual warning is enough, OR we could do a simple confirm check:
-            // But requirement says "No blocking modals unless user tries to export".
-            // So we proceed, but maybe log the warning in notes? (Optional improvement)
-        }
-
+        setIsReusing(reuse);
         setSaving(true);
         try {
+            // ... (rest of logic same until success)
             if (type === 'SPRAY') {
                 const finalAcres = parseFloat(inputAcreage);
                 if (isNaN(finalAcres) || finalAcres <= 0) throw new Error('Valid acreage required');
 
                 const selectedRecipe = recipes.find(r => r.id === selectedItemId);
-
-                // Calculate total chemical volume (sum of all items)
                 const totalChemicalVolume = selectedRecipe?.items?.reduce((acc, i) => acc + i.rate, 0) || (selectedRecipe?.rate_per_acre || 0);
 
                 await addSprayLog({
@@ -254,10 +265,6 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                     rei_hours: selectedRecipe?.rei_hours,
                     notes: notes,
                     sprayedAt: sprayedAt.toISOString(),
-                    sprayedAt: sprayedAt.toISOString(),
-                    // Safety: Void & Replace
-                    // If replacesLogId is set, backend/hook logic must handle the voiding of the old record.
-                    // We pass the new ID reference and reason.
                     replacesLogId: replacesLogId || undefined,
                     voidReason: replacesLogId ? voidReason : undefined
                 });
@@ -272,10 +279,9 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                     replacesLogId: replacesLogId || undefined,
                     voidReason: replacesLogId ? voidReason : undefined
                 });
-            } else if (type === 'HARVEST') {
+            } else if (type === 'HARVEST') { // ... existing log logic
                 const fieldId = fixedType === 'FIELD' ? fixedId : null;
                 const binId = fixedType === 'BIN' ? fixedId : selectedItemId!;
-
                 await addGrainLog({
                     type: 'HARVEST',
                     field_id: fieldId,
@@ -303,7 +309,6 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                 });
             }
 
-            // SUCCESS FLOW
             setSaving(false);
             setShowSuccess(true);
         } catch (error: any) {
@@ -318,11 +323,14 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
         return (
             <View style={[styles.centered, { backgroundColor: Theme.colors.success }]}>
                 <Text style={{ fontSize: 60, color: '#fff', fontWeight: 'bold' }}>✓</Text>
-                <Text style={{ fontSize: 32, color: '#fff', fontWeight: 'bold', marginTop: 20 }}>SAVED</Text>
+                <Text style={{ fontSize: 32, color: '#fff', fontWeight: 'bold', marginTop: 20 }}>
+                    {isReusing ? 'SAVED (Next...)' : 'SAVED'}
+                </Text>
             </View>
         );
     }
 
+    // ... loading check ...
     if (loading) {
         return (
             <View style={styles.centered}>
@@ -337,11 +345,11 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={onClose}>
+                <TouchableOpacity onPress={onClose} style={{ padding: 8, minHeight: 44, justifyContent: 'center' }} accessibilityLabel="Cancel Log" accessibilityRole="button">
                     <Text style={styles.closeText}>Cancel</Text>
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>{type.replace('_', ' ')} Log</Text>
-                <TouchableOpacity onPress={handleLog} disabled={saving}>
+                <Text style={styles.headerTitle} accessibilityRole="header">{type.replace('_', ' ')} Log</Text>
+                <TouchableOpacity onPress={() => handleLog(false)} disabled={saving} style={{ padding: 8, minHeight: 44, justifyContent: 'center' }} accessibilityLabel="Save and Close" accessibilityRole="button" accessibilityState={{ disabled: saving }}>
                     <Text style={[styles.saveHeaderText, saving && { color: Theme.colors.textSecondary }]}>
                         {saving ? 'Saving' : 'SAVE'}
                     </Text>
@@ -349,15 +357,20 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent}>
-                {/* 1. TOP CARD: Context (Field, Date, Weather) - COMPACT */}
+                {/* ... (Top Card & Inputs remain same) ... */}
                 <View style={styles.topCard}>
                     <View style={styles.rowBetween}>
-                        <View>
+                        <View accessible accessibilityLabel={`Field: ${fixedName}`}>
                             <Text style={styles.fieldName}>{fixedName}</Text>
                             {replacesLogId && <Text style={{ color: Theme.colors.warning, fontWeight: 'bold', fontSize: 10 }}>CORRECTING RECORD</Text>}
                         </View>
-                        {/* Compact Time Control */}
-                        <TouchableOpacity style={styles.compactControl} onPress={() => setShowTimePicker(true)}>
+                        {/* ... (Time Control) ... */}
+                        <TouchableOpacity
+                            style={styles.compactControl}
+                            onPress={() => setShowTimePicker(true)}
+                            accessibilityLabel={`Time: ${sprayedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Tap to change.`}
+                            accessibilityRole="button"
+                        >
                             <Text style={styles.compactLabel}>TIME</Text>
                             <Text style={styles.compactValue}>
                                 {sprayedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -365,11 +378,13 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                         </TouchableOpacity>
                     </View>
 
-                    {/* Compact Weather Control */}
+                    {/* ... (Weather Control) ... */}
                     <View style={{ marginTop: 12 }}>
                         <TouchableOpacity
-                            style={[styles.rowBetween, { paddingVertical: 4 }]}
+                            style={[styles.rowBetween, { paddingVertical: 12 }]}
                             onPress={() => setExpandedWeather(!expandedWeather)}
+                            accessibilityLabel={`Weather: ${temp} degrees, wind ${wind} mph ${windDir}. Tap to ${expandedWeather ? 'collapse' : 'edit'}.`}
+                            accessibilityRole="button"
                         >
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 <Text style={[styles.compactLabel, { marginRight: 8 }]}>WEATHER {weatherSource === 'MANUAL' ? '(Edited)' : '(Auto)'}</Text>
@@ -379,34 +394,55 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                                 <Text style={{ marginLeft: 6, color: Theme.colors.primary, fontSize: 12 }}>{expandedWeather ? '▲' : '▼'}</Text>
                             </View>
                         </TouchableOpacity>
-
-                        {/* Expandable Weather Edit */}
+                        {/* ... (Weather Edit Container) ... */}
                         {expandedWeather && (
                             <View style={styles.weatherEditContainer}>
                                 <View style={styles.weatherInputRow}>
                                     <View style={styles.weatherInputGroup}>
                                         <Text style={styles.inputLabelSmall}>Temp</Text>
-                                        <TextInput style={styles.weatherInput} value={temp} onChangeText={t => handleWeatherChange('temp', t)} keyboardType="numeric" />
+                                        <TextInput
+                                            style={styles.weatherInput}
+                                            value={temp}
+                                            onChangeText={t => handleWeatherChange('temp', t)}
+                                            keyboardType="numeric"
+                                            accessibilityLabel="Temperature"
+                                        />
                                     </View>
                                     <View style={styles.weatherInputGroup}>
                                         <Text style={styles.inputLabelSmall}>Wind</Text>
-                                        <TextInput style={[styles.weatherInput, windWarning && { borderColor: Theme.colors.danger, borderWidth: 2 }]} value={wind} onChangeText={t => handleWeatherChange('wind', t)} keyboardType="numeric" />
+                                        <TextInput
+                                            style={[styles.weatherInput, windWarning && { borderColor: Theme.colors.danger, borderWidth: 2 }]}
+                                            value={wind}
+                                            onChangeText={t => handleWeatherChange('wind', t)}
+                                            keyboardType="numeric"
+                                            accessibilityLabel="Wind Speed"
+                                        />
                                     </View>
                                     <View style={styles.weatherInputGroup}>
                                         <Text style={styles.inputLabelSmall}>Dir</Text>
-                                        <TextInput style={styles.weatherInput} value={windDir} onChangeText={t => handleWeatherChange('dir', t)} />
+                                        <TextInput
+                                            style={styles.weatherInput}
+                                            value={windDir}
+                                            onChangeText={t => handleWeatherChange('dir', t)}
+                                            accessibilityLabel="Wind Direction"
+                                        />
                                     </View>
                                     <View style={styles.weatherInputGroup}>
                                         <Text style={styles.inputLabelSmall}>Hum %</Text>
-                                        <TextInput style={styles.weatherInput} value={humidity} onChangeText={t => handleWeatherChange('hum', t)} keyboardType="numeric" />
+                                        <TextInput
+                                            style={styles.weatherInput}
+                                            value={humidity}
+                                            onChangeText={t => handleWeatherChange('hum', t)}
+                                            keyboardType="numeric"
+                                            accessibilityLabel="Humidity Percentage"
+                                        />
                                     </View>
                                 </View>
                                 {windWarning && <Text style={styles.warningText}>⚠️ Please confirm wind speed (required)</Text>}
                             </View>
                         )}
                     </View>
-
-                    {/* Date Picker Modal (Platform specific logic usually needed, simplifying for demo) */}
+                    {/* ... (Date Picker) ... */}
                     {showTimePicker && (
                         <DateTimePicker
                             value={sprayedAt}
@@ -422,8 +458,9 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
 
                 {/* 2. MAIN INPUTS: Recipe & Acres */}
                 <View style={styles.section}>
+                    {/* ... (Section Header) ... */}
                     <View style={styles.rowBetween}>
-                        <Text style={styles.sectionTitle}>
+                        <Text style={styles.sectionTitle} accessibilityRole="header">
                             {type === 'SPRAY' ? 'RECIPE' : type === 'PLANTING' ? 'SEED' : 'ITEM'}
                         </Text>
                         {type === 'SPRAY' && (
@@ -434,11 +471,12 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                                     value={inputAcreage}
                                     onChangeText={setInputAcreage}
                                     keyboardType="numeric"
+                                    accessibilityLabel="Acres Treated"
                                 />
                             </View>
                         )}
                     </View>
-                    {acreageWarning && <Text style={[styles.warningText, { textAlign: 'right', marginBottom: 5 }]}>⚠️ Variance > 20%</Text>}
+                    {acreageWarning && <Text style={[styles.warningText, { textAlign: 'right', marginBottom: 5 }]}>⚠️ Variance {" > "} 20%</Text>}
 
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
                         {items.map((item) => {
@@ -470,6 +508,9 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                                             }
                                         }
                                     }}
+                                    accessibilityLabel={`${label} ${selectedItemId === id ? 'Selected' : ''}`}
+                                    accessibilityRole="radio"
+                                    accessibilityState={{ checked: selectedItemId === id }}
                                 >
                                     <Text style={[styles.itemText, selectedItemId === id && styles.itemTextActive]}>
                                         {label}
@@ -483,7 +524,7 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                     </ScrollView>
                 </View>
 
-                {/* 3. OPTIONAL / DETAILS (Collapsed details or simple inputs) */}
+                {/* 3. OPTIONAL / DETAILS */}
                 <View style={styles.section}>
                     <TextInput
                         style={styles.simpleNotes}
@@ -491,10 +532,11 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                         placeholder="Add notes..."
                         value={notes}
                         onChangeText={setNotes}
+                        accessibilityLabel="Notes"
                     />
                 </View>
 
-                {/* Correction Reason (Only if replacing) */}
+                {/* Correction Reason */}
                 {(type === 'SPRAY' || type === 'PLANTING') && replacesLogId && (
                     <View style={styles.section}>
                         <Text style={[styles.sectionTitle, { color: Theme.colors.danger }]}>CORRECTION REASON</Text>
@@ -503,12 +545,23 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                             placeholder="Reason for voiding the previous record..."
                             value={voidReason}
                             onChangeText={setVoidReason}
+                            accessibilityLabel="Void Reason"
                         />
                     </View>
                 )}
 
-                {/* Extra Fields (Hidden by default or minimal for Fast Entry, kept for full functionality if needed) */}
-                {/* We can expose Applicator Name nearby if needed, but per "Farmer-simple", try to keep it clean. */}
+                {/* SAVE AND REUSE BUTTON */}
+                <View style={{ paddingHorizontal: Theme.spacing.md, marginTop: 10 }}>
+                    <TouchableOpacity
+                        style={styles.saveReuseButton}
+                        onPress={() => handleLog(true)}
+                        disabled={saving}
+                        accessibilityLabel="Save and Add Another"
+                        accessibilityRole="button"
+                    >
+                        <Text style={styles.saveReuseText}>{saving ? 'Saving...' : 'SAVE & ADD ANOTHER ＋'}</Text>
+                    </TouchableOpacity>
+                </View>
 
             </ScrollView>
         </SafeAreaView>
@@ -523,10 +576,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: Theme.spacing.lg,
+        paddingHorizontal: Theme.spacing.lg,
+        paddingVertical: Theme.spacing.sm, // Reduced padding as we added padding to buttons
         borderBottomWidth: 1,
         borderBottomColor: Theme.colors.border,
-        backgroundColor: '#fff'
+        backgroundColor: '#fff',
+        minHeight: 50 // Ensure header has height
     },
     closeText: { color: Theme.colors.textSecondary, fontSize: 16 },
     headerTitle: { ...Theme.typography.h2 },
@@ -545,9 +600,11 @@ const styles = StyleSheet.create({
     compactControl: {
         backgroundColor: '#F5F5F5',
         paddingHorizontal: 12,
-        paddingVertical: 6,
+        paddingVertical: 10, // Increased for touch target
         borderRadius: 8,
-        alignItems: 'center'
+        alignItems: 'center',
+        minWidth: 80,
+        minHeight: 44 // Ensure min height
     },
     compactLabel: { fontSize: 9, color: Theme.colors.textSecondary, fontWeight: 'bold' },
     compactValue: { fontSize: 14, fontWeight: '600', color: Theme.colors.text },
@@ -569,7 +626,8 @@ const styles = StyleSheet.create({
         borderRadius: 4,
         width: '90%',
         textAlign: 'center',
-        paddingVertical: 4
+        paddingVertical: 8, // More padding
+        minHeight: 40
     },
     inputLabelSmall: { fontSize: 10, color: Theme.colors.textSecondary, marginBottom: 2 },
     warningText: { color: Theme.colors.warning, fontSize: 11, marginTop: 4, fontStyle: 'italic' },
@@ -600,10 +658,11 @@ const styles = StyleSheet.create({
         borderColor: Theme.colors.border,
         backgroundColor: '#fff',
         borderRadius: 4,
-        width: 60,
+        width: 70, // Wider for easier tap
         textAlign: 'center',
-        paddingVertical: 2,
-        fontWeight: 'bold'
+        paddingVertical: 6,
+        fontWeight: 'bold',
+        minHeight: 40
     },
 
     simpleNotes: {
@@ -624,4 +683,17 @@ const styles = StyleSheet.create({
         fontSize: 16,
         marginBottom: Theme.spacing.sm,
     },
+    saveReuseButton: {
+        backgroundColor: Theme.colors.secondary, // Or a distinct color like Theme.colors.info
+        padding: Theme.spacing.lg,
+        borderRadius: Theme.borderRadius.md,
+        alignItems: 'center',
+        marginBottom: 20,
+        ...Theme.shadows.md
+    },
+    saveReuseText: {
+        color: Theme.colors.primary,
+        fontWeight: 'bold',
+        fontSize: 16
+    }
 });

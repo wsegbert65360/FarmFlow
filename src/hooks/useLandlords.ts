@@ -36,7 +36,16 @@ export const useLandlords = () => {
             }
         );
 
-        // ... (rest of watch remains same)
+        // Watch Field Splits
+        watchFarmQuery(
+            'SELECT * FROM landlord_shares WHERE farm_id = ?',
+            [farmId],
+            {
+                onResult: (result: any) => setFieldSplits(result.rows?._array || []),
+                onError: (error: any) => console.error('Failed to watch field splits', error)
+            }
+        );
+
         return () => abortController.abort();
     }, [farmId]);
 

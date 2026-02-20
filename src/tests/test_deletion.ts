@@ -16,14 +16,14 @@ const simulateDB = () => {
     return {
         getRecordCount: () => ({ logs: logs.length, movements: movements.length, bins: bins.length }),
 
-        deleteGrainLog: (id, farmId) => {
+        deleteGrainLog: (id: string, farmId: string) => {
             console.log(`Simulating deleteGrainLog(${id})`);
             // The actual code uses: DELETE FROM lot_movements WHERE source_grain_log_id = ? AND farm_id = ?
             movements = movements.filter(m => !(m.source_grain_log_id === id && m.farm_id === farmId));
             logs = logs.filter(l => !(l.id === id && l.farm_id === farmId));
         },
 
-        deleteBin: (id, farmId) => {
+        deleteBin: (id: string, farmId: string) => {
             console.log(`Simulating deleteBin(${id})`);
             // The actual code uses: DELETE FROM lot_movements WHERE bin_id = ? AND farm_id = ?
             movements = movements.filter(m => !(m.bin_id === id && m.farm_id === farmId));

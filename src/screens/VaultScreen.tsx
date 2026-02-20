@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions } from 'react-native';
+import { LoadingState, EmptyState } from '../components/common/UniversalStates';
 import { showAlert, showConfirm, showDeleteConfirm } from '../utils/AlertUtility';
 import QRCode from 'react-native-qrcode-svg';
 import { Theme } from '../constants/Theme';
@@ -24,6 +25,9 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
     const [activeTab, setActiveTab] = useState<VaultTab>(initialTab || 'CHEMICALS');
     const { recipes, addRecipe, updateRecipe, deleteRecipe, sprayLogs, loading: recipesLoading } = useSpray();
     const { seeds, addSeed, updateSeed, deleteSeed, loading: seedsLoading } = usePlanting();
+
+
+    // ... (in component)
     const { landlords, fieldSplits, loading: landlordsLoading, addLandlord, deleteSplit, deleteLandlord } = useLandlords();
     const { grainLogs, loading: grainLoading } = useGrain();
     const { settings, saveSettings } = useSettings();
@@ -31,6 +35,12 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
 
     const isDesktop = width > 768;
     const numColumns = isDesktop ? (width > 1200 ? 3 : 2) : 1;
+
+    // Derived loading state
+    const loading = activeTab === 'CHEMICALS' ? recipesLoading :
+        activeTab === 'SEEDS' ? seedsLoading :
+            activeTab === 'LANDLORDS' ? landlordsLoading :
+                false;
 
     const [modalVisible, setModalVisible] = useState(false);
     const [editingItem, setEditingItem] = useState<VaultItem | null>(null);
@@ -288,6 +298,7 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
             accentColor={Theme.colors.secondary}
         />
     );
+    // ...
 
     return (
         <View style={styles.container}>
@@ -384,7 +395,11 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
                 columnWrapperStyle={numColumns > 1 && activeTab !== 'SETTINGS' ? { gap: Theme.spacing.md } : undefined}
                 initialNumToRender={10}
                 windowSize={5}
-                contentContainerStyle={styles.list}
+                contentContainerStyle={[
+                    styles.list,
+                    (activeTab !== 'SETTINGS' && activeTab !== 'REPORTS' && ((activeTab === 'CHEMICALS' && recipes.length === 0) || (activeTab === 'SEEDS' && seeds.length === 0) || (activeTab === 'LANDLORDS' && landlords.length === 0))) && { flex: 1, justifyContent: 'center' }
+                ]}
+                refreshing={loading}
                 ListHeaderComponent={
                     <View style={styles.header}>
                         <Text style={styles.headerTitle}>
@@ -407,9 +422,16 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
                     </View>
                 }
                 ListEmptyComponent={
-                    <View style={styles.emptyState}>
-                        <Text style={styles.emptyText}>No {activeTab.toLowerCase()} added yet.</Text>
-                    </View>
+                    loading ? (
+                        <LoadingState message={`Syncing ${activeTab.toLowerCase()}...`} />
+                    ) : (
+                        <EmptyState
+                            title={`No ${activeTab === 'CHEMICALS' ? 'Recipes' : activeTab === 'SEEDS' ? 'Seeds' : 'Items'} Found`}
+                            message={`Add your first ${activeTab.toLowerCase()} to get started.`}
+                            actionLabel="+ Add New"
+                            onAction={() => openModal()}
+                        />
+                    )
                 }
             />
 

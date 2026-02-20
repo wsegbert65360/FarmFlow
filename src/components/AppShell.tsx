@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, StatusBar, TouchableOpacity, Image, useWindowDimensions } from 'react-native';
 import { Theme } from '../constants/Theme';
 import { useSettings } from '../hooks/useSettings';
-import { SyncIndicator } from './SyncIndicator';
+import { SyncStatusPill } from './SyncStatusPill';
 import { ResponsiveLayout } from './ResponsiveLayout';
 import { StatusOverlay } from './StatusOverlay';
 
@@ -11,7 +11,9 @@ import { HistoryTab } from '../screens/tabs/HistoryTab';
 import { DashboardTab } from '../screens/tabs/DashboardTab';
 import { ManageTab } from '../screens/tabs/ManageTab';
 import { SettingsTab } from '../screens/tabs/SettingsTab';
+import { MoreTab } from '../screens/tabs/MoreTab';
 import { LogSessionScreen, LogType } from '../screens/LogSessionScreen';
+import { HeaderHelper } from './HeaderHelper';
 import { db } from '../db/powersync';
 import { useAuth } from '../hooks/useAuth';
 import { AuthContext } from '../context/AuthProvider';
@@ -70,6 +72,18 @@ export const AppShell = () => {
         );
     }
 
+    const getTabTitle = (tab: TabType) => {
+        switch (tab) {
+            case 'LOG': return 'Log Activity';
+            case 'HISTORY': return 'History';
+            case 'DASHBOARD': return 'Dashboard';
+            case 'MANAGE': return 'Manage';
+            case 'SETTINGS': return 'Settings';
+            case 'MORE': return 'More';
+            default: return 'FarmFlow';
+        }
+    };
+
     const renderContent = () => {
         switch (activeTab) {
             case 'LOG':
@@ -82,6 +96,8 @@ export const AppShell = () => {
                 return <ManageTab />;
             case 'SETTINGS':
                 return <SettingsTab />;
+            case 'MORE':
+                return <MoreTab />;
             default:
                 return <LogTab onLogAction={setActiveLog} />;
         }
@@ -90,6 +106,8 @@ export const AppShell = () => {
     return (
         <SafeAreaView style={styles.safeArea}>
             <StatusBar barStyle="light-content" />
+
+
 
             {!isDesktop && (
                 <View style={styles.header}>
@@ -100,12 +118,12 @@ export const AppShell = () => {
                         />
                         <View>
                             <TouchableOpacity onPress={() => setShowFarmSwitcher(true)}>
-                                <Text style={styles.headerTitle}>{settings?.farm_name || 'FarmFlow'} ▾</Text>
+                                <Text style={styles.headerTitle}>{getTabTitle(activeTab)} ▾</Text>
                             </TouchableOpacity>
-                            <Text style={styles.headerSubtitle}>{activeTab}</Text>
+                            <HeaderHelper activeTab={activeTab} />
                         </View>
                     </View>
-                    <SyncIndicator />
+                    <SyncStatusPill />
                 </View>
             )}
 

@@ -12,6 +12,7 @@ export const Theme = {
         warning: '#FBC02D',
         white: '#FFFFFF',
         whiteMuted: 'rgba(255,255,255,0.8)',
+        disabled: '#9E9E9E', // Added for disabled interactions
     },
     spacing: {
         xs: 4,
@@ -29,6 +30,7 @@ export const Theme = {
     typography: {
         h1: { fontSize: 24, fontWeight: 'bold' as const },
         h2: { fontSize: 20, fontWeight: 'bold' as const },
+        h3: { fontSize: 18, fontWeight: 'bold' as const }, // Added h3
         body: { fontSize: 16 },
         caption: { fontSize: 12 },
     },

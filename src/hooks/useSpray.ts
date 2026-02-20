@@ -79,7 +79,7 @@ export const useSpray = () => {
                 }
             }
 
-            console.log(`[Void] Log ${logId} voided and inventory restored.`);
+
         } catch (error) {
             console.error('Failed to void spray log', error);
             throw error;

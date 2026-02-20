@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, Modal, TextInput, SafeAreaView, ScrollView, useWindowDimensions, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, SafeAreaView, Modal, TextInput, useWindowDimensions, Platform } from 'react-native';
 import { showAlert } from '../utils/AlertUtility';
 import { Theme } from '../constants/Theme';
 import { useFields, Field } from '../hooks/useFields';
@@ -10,6 +10,7 @@ import { db } from '../db/powersync';
 import { fetchFieldSeasonalData } from '../hooks/useFieldReport';
 import { generateReport } from '../utils/ReportUtility';
 import { useAgreements } from '../hooks/useAgreements';
+import { LoadingState, EmptyState } from '../components/common/UniversalStates';
 
 interface FieldListProps {
     onSelectAction: (field: Field, type: 'SPRAY' | 'PLANTING' | 'HARVEST' | 'DELIVERY', replacesLogId?: string) => void;
@@ -17,6 +18,7 @@ interface FieldListProps {
 }
 
 export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListProps) => {
+    const [search, setSearch] = useState('');
     const { fields, loading: fieldsLoading, addField } = useFields();
     const { atRiskCount, loading: inventoryLoading } = useInventory();
     const { farmId } = useDatabase();
@@ -51,10 +53,10 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
 
         // Optimize: Join to find the agreement for this specific field directly
         const result = await db.getAll(
-            `SELECT ra.* 
+            `SELECT ra.*
              FROM rent_agreements ra
              JOIN agreement_fields af ON ra.id = af.agreement_id
-             WHERE af.field_id = ? 
+             WHERE af.field_id = ?
              AND ra.crop_year = ?
              AND ra.farm_id = ?`,
             [fieldId, new Date().getFullYear(), farmId]
@@ -108,14 +110,18 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
 
 
     const renderField = ({ item }: { item: Field }) => (
-        <TouchableOpacity style={styles.fieldCard} onPress={() => handleFieldPress(item)}>
+        <TouchableOpacity
+            style={styles.fieldCard}
+            onPress={() => handleFieldPress(item)}
+            testID={`field-item-${item.id}`}
+        >
             <View style={{ flex: 1 }}>
                 <Text style={styles.fieldName}>{item.name}</Text>
                 <Text style={styles.fieldAcreage}>{item.acreage} Acres</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-                <View style={styles.logBadge}>
-                    <Text style={styles.logBadgeText}>Log</Text>
+                <View style={styles.logBadgeGhost}>
+                    <Text style={styles.logBadgeTextGhost}>Log +</Text>
                 </View>
                 {item.distance !== undefined && item.distance !== Infinity && (
                     <Text style={styles.distanceText}>{item.distance.toFixed(1)} mi</Text>
@@ -146,13 +152,25 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
                 renderItem={renderField}
                 keyExtractor={(item) => item.id}
                 numColumns={numColumns}
-                contentContainerStyle={[styles.list, isDesktop && { paddingHorizontal: Theme.spacing.xl }]}
+                contentContainerStyle={[
+                    styles.list,
+                    fields.length === 0 && { flex: 1, justifyContent: 'center' },
+                    isDesktop && { paddingHorizontal: Theme.spacing.xl }
+                ]}
                 columnWrapperStyle={numColumns > 1 ? { gap: Theme.spacing.md } : undefined}
                 refreshing={loading}
+                onRefresh={() => { /* Handled by hooks */ }}
                 ListEmptyComponent={
-                    <View style={styles.emptyState}>
-                        <Text style={styles.emptyText}>No fields added yet.</Text>
-                    </View>
+                    loading ? (
+                        <LoadingState message="Syncing fields..." />
+                    ) : (
+                        <EmptyState
+                            title="No Fields Yet"
+                            message="Add your first field to start tracking activities."
+                            actionLabel="+ Add Field"
+                            onAction={() => setModalVisible(true)}
+                        />
+                    )
                 }
             />
 
@@ -185,6 +203,7 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
                                 setActionPickerVisible(false);
                                 if (selectedField) onSelectAction(selectedField, 'SPRAY');
                             }}
+                            testID="action-start-spraying"
                         >
                             <Text style={styles.actionButtonText}>Start Spraying</Text>
                         </TouchableOpacity>
@@ -262,40 +281,6 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
                         >
                             <Text style={[styles.actionButtonText, { color: Theme.colors.warning }]}>Manage splits</Text>
                         </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.actionButton}
-                            onPress={() => {
-                                setActionPickerVisible(false);
-                                setSplitsModalVisible(true);
-                            }}
-                        >
-                            <Text style={[styles.actionButtonText, { color: Theme.colors.warning }]}>Manage splits</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.actionButton}
-                            onPress={() => {
-                                setActionPickerVisible(false);
-                                setSplitsModalVisible(true);
-                            }}
-                        >
-                            <Text style={[styles.actionButtonText, { color: Theme.colors.warning }]}>Manage splits</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.actionButton, { marginTop: 10, borderTopWidth: 1, borderTopColor: Theme.colors.border }]}
-                            onPress={handleViewHistory}
-                        >
-                            <Text style={[styles.actionButtonText, { color: Theme.colors.textSecondary }]}>🕒 View History / Audit</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.actionButton, { marginTop: 5 }]}
-                            onPress={() => setActionPickerVisible(false)}
-                        >
-                            <Text style={[styles.actionButtonText, { color: Theme.colors.danger }]}>Cancel</Text>
-                        </TouchableOpacity>
                     </View>
                 </TouchableOpacity>
             </Modal>
@@ -307,7 +292,7 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
                         <TouchableOpacity onPress={() => setHistoryModalVisible(false)}>
                             <Text style={styles.closeText}>Close</Text>
                         </TouchableOpacity>
-                        <Text style={styles.headerTitle}>{selectedField?.name} History</Text>
+                        <Text style={styles.actionSheetTitle}>{selectedField?.name} History</Text>
                         <View style={{ width: 50 }} />
                     </View>
                     <FlatList
@@ -329,7 +314,7 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
                                             <Text style={styles.logDetail}>{item.brand} {item.variety_name}</Text>
                                         )}
                                         {item.type === 'HARVEST' && (
-                                            <Text style={styles.logDetail}>{item.bushels_net} bu -> {item.bin_name || 'Elevator'}</Text>
+                                            <Text style={styles.logDetail}>{item.bushels_net} bu {"->"} {item.bin_name || 'Elevator'}</Text>
                                         )}
                                         {item.voided_at && (
                                             <Text style={{ color: Theme.colors.danger, fontSize: 10, marginTop: 4 }}>Reason: {item.void_reason}</Text>
@@ -351,23 +336,22 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
                                 </View>
                             </View>
                         )}
-                        ListEmptyComponent={<Text style={styles.emptyText}>No history found.</Text>}
+                        ListEmptyComponent={
+                            loadingHistory ? (
+                                <LoadingState message="Loading history..." />
+                            ) : (
+                                <EmptyState
+                                    title="No History"
+                                    message="No logs found for this field yet."
+                                />
+                            )
+                        }
                     />
                 </SafeAreaView>
-                <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => {
-                        setActionPickerVisible(false);
-                        setSplitsModalVisible(true);
-                    }}
-                >
-                    <Text style={[styles.actionButtonText, { color: Theme.colors.warning }]}>Manage splits</Text>
-                </TouchableOpacity>
-
-            </Modal >
+            </Modal>
 
             {/* Add Field Modal */}
-            < Modal visible={modalVisible} transparent animationType="slide" >
+            <Modal visible={modalVisible} transparent animationType="slide">
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { height: '50%' }]}>
                         <Text style={styles.modalTitle}>New Field</Text>
@@ -392,10 +376,10 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
                         </TouchableOpacity>
                     </View>
                 </View>
-            </Modal >
+            </Modal>
 
             {/* Manage Splits Modal */}
-            < Modal visible={splitsModalVisible} transparent animationType="slide" >
+            <Modal visible={splitsModalVisible} transparent animationType="slide">
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { height: '70%' }]}>
                         <Text style={styles.modalTitle}>Splits: {selectedField?.name}</Text>
@@ -458,8 +442,8 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
                         </TouchableOpacity>
                     </View>
                 </View>
-            </Modal >
-        </SafeAreaView >
+            </Modal>
+        </SafeAreaView>
     );
 };
 
@@ -508,6 +492,16 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     logBadgeText: { color: '#FFF', fontWeight: 'bold', fontSize: 12 },
+    logBadgeGhost: {
+        borderWidth: 1,
+        borderColor: Theme.colors.primary,
+        backgroundColor: 'transparent',
+        paddingHorizontal: Theme.spacing.md,
+        paddingVertical: Theme.spacing.xs,
+        borderRadius: Theme.borderRadius.sm,
+        marginBottom: 4,
+    },
+    logBadgeTextGhost: { color: Theme.colors.primary, fontWeight: 'bold', fontSize: 12 },
     distanceText: { ...Theme.typography.caption, color: Theme.colors.textSecondary },
     emptyState: { marginTop: 50, alignItems: 'center' },
     emptyText: { color: Theme.colors.textSecondary },

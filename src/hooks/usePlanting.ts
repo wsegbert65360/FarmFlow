@@ -147,8 +147,9 @@ export const usePlanting = () => {
                 'SELECT population FROM planting_logs WHERE farm_id = ? AND field_id = ? AND voided_at IS NULL ORDER BY planted_at DESC LIMIT 1',
                 [farmId, fieldId]
             );
-            if (fieldLog.rows?._array?.length > 0) {
-                return fieldLog.rows._array[0].population;
+            const fieldRows = fieldLog?.rows?._array ?? [];
+            if (fieldRows.length > 0) {
+                return fieldRows[0].population;
             }
 
             // 2. Fallback to Seed History (Last used anywhere on farm) - EXCLUDE VOIDED
@@ -156,8 +157,9 @@ export const usePlanting = () => {
                 'SELECT population FROM planting_logs WHERE farm_id = ? AND seed_id = ? AND voided_at IS NULL ORDER BY planted_at DESC LIMIT 1',
                 [farmId, seedId]
             );
-            if (seedLog.rows?._array?.length > 0) {
-                return seedLog.rows._array[0].population;
+            const seedRows = seedLog?.rows?._array ?? [];
+            if (seedRows.length > 0) {
+                return seedRows[0].population;
             }
 
             return null;

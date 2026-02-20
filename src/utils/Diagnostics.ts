@@ -1,19 +1,20 @@
 import { Share } from 'react-native';
 import * as FileSystem from 'expo-file-system';
+import Constants from 'expo-constants';
 import { db } from '../db/powersync';
-import { SyncController } from '../sync/SyncController';
+import { syncController } from '../sync/SyncController';
 import { supabase } from '../supabase/client';
 
 export const exportDiagnostics = async () => {
     try {
-        const syncController = SyncController.getInstance();
         const session = await supabase.auth.getSession();
+        const syncState = syncController.getState();
 
         const diagnosticData = {
             timestamp: new Date().toISOString(),
             app: {
                 name: 'FarmFlow',
-                version: '1.0.0', // TODO: Pull from Constants.manifest
+                version: Constants.expoConfig?.version ?? '1.0.0',
                 platform: process.platform,
             },
             auth: {
@@ -21,19 +22,19 @@ export const exportDiagnostics = async () => {
                 authenticated: !!session.data.session,
             },
             sync: {
-                status: syncController.getStatus(),
-                lastSyncedAt: syncController.getLastSyncedAt()?.toISOString(),
-                isOnline: syncController.isOnline(),
+                status: syncState.mode,
+                lastSyncedAt: syncState.lastSyncedAt?.toISOString(),
+                isOnline: syncState.isConnected,
             },
             storage: {
                 // Quick check of record counts
-                fields: (await db.getAll('SELECT count(*) as c FROM fields'))[0]['c'],
-                logs: (await db.getAll('SELECT count(*) as c FROM spray_logs'))[0]['c'],
+                fields: ((await db.getAll('SELECT count(*) as c FROM fields')) as any[])[0]['c'],
+                logs: ((await db.getAll('SELECT count(*) as c FROM spray_logs')) as any[])[0]['c'],
             },
-            errors: syncController.getErrorLog(), // We need to add this method to SyncController
+            errors: syncController.getErrorLog(),
         };
 
-        const fileName = `${FileSystem.documentDirectory}diagnostics_${new Date().getTime()}.json`;
+        const fileName = `${(FileSystem as any).documentDirectory}diagnostics_${new Date().getTime()}.json`;
         await FileSystem.writeAsStringAsync(fileName, JSON.stringify(diagnosticData, null, 2));
 
         if (await FileSystem.getInfoAsync(fileName)) {

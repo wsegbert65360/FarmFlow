@@ -15,6 +15,7 @@ import { SQLJSOpenFactory } from '@powersync/adapter-sql-js';
 import Dexie, { type Table as DexieTable } from 'dexie';
 import { connector } from './SupabaseConnector';
 import { AppSchema } from './schema';
+export { AppSchema };
 
 let ReactNativeRemote: any;
 let ReactNativeStreamingSyncImplementation: any;
@@ -241,12 +242,12 @@ if (isWeb || isExpoGo) {
     });
 }
 
-export const db = dbInstance;
-
 // Expose for E2E testing
-if (isWeb) {
-    (window as any).powersync = db;
+if (typeof globalThis !== 'undefined') {
+    (globalThis as any).powersync = dbInstance;
 }
+
+export const db = dbInstance;
 
 // Start synchronization
 db.connect(connector).catch((e: any) => console.error('PowerSync connect error:', e));

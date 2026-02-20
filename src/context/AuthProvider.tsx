@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../supabase/client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 type AuthContextType = {
     session: Session | null;
@@ -43,21 +45,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     const switchFarm = async (farmId: string) => {
-        // In a real implementation, we might update a 'last_farm_id' in user profile
-        // For now, we rely on the App wrapper to pick up the new farm if we force a reload or state change.
-        // A simple way is to reload the app if on web, or just trigger a re-render.
-        // However, the cleanest way in this architecture is to update the 'settings' table or local state?
-        // Actually, 'settings' is per-farm. 
-        // Strategy: We will use the 'FarmGate' concept. If we change the 'farmId' prop passed to data hooks, it should work.
-        // But 'FarmGate' usually reads from the first available farm or a stored preference.
-        // Let's store 'activeFarmId' in AsyncStorage/localStorage.
-
-        // For Phase 4, let's assume we just need to notify the app.
-        // We'll expose a listener or just rely on the UI to drive the change if we pass it down.
-        // But simpler: just reload the window on web, or emit an event.
-        console.log('Switching to farm:', farmId);
-        // TODO: wiring this up fully requires a 'UserPreferences' table or local storage check in FarmGate.
-        // For now, prompt the user that switching reloads the context.
+        try {
+            await AsyncStorage.setItem('farmflow_active_farm', farmId);
+            // In a real app with 'FarmGate', this would trigger a context update.
+            // For now, we force a reload to ensure all hooks (useDatabase) pick up the change
+            // if they are reading from storage or if we emitted an event.
+            // Since this is a lightweight web/mobile app, a reload is the safest "Hard Switch".
+            if (Platform.OS === 'web') {
+                window.location.reload();
+            } else {
+                // For native, we might need a bespoke 'FarmContext' that wraps the app.
+                // Assuming 'useDatabase' reads this somehow or we assume one farm for now.
+                // We'll just alert.
+                alert('Farm switched. Please restart app to apply.');
+            }
+        } catch (e) {
+            console.error('Failed to switch farm', e);
+        }
     };
 
     const value = {

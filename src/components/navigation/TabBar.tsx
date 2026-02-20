@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { Theme } from '../../constants/Theme';
 
-export type TabType = 'LOG' | 'HISTORY' | 'DASHBOARD' | 'MANAGE' | 'SETTINGS';
+export type TabType = 'LOG' | 'HISTORY' | 'DASHBOARD' | 'MANAGE' | 'SETTINGS' | 'MORE';
 
 interface TabBarProps {
     activeTab: TabType;
@@ -10,29 +10,35 @@ interface TabBarProps {
 }
 
 export const TabBar: React.FC<TabBarProps> = ({ activeTab, setActiveTab }) => {
+    // Determine if MORE should be highlighted (if we are in hidden sub-tabs)
+    const isMoreActive = activeTab === 'MORE' || activeTab === 'MANAGE' || activeTab === 'SETTINGS';
+
     const tabs: { type: TabType; icon: string; label: string }[] = [
+        { type: 'DASHBOARD', icon: '📊', label: 'Dash' },
         { type: 'LOG', icon: '➕', label: 'Log' },
         { type: 'HISTORY', icon: '🕒', label: 'History' },
-        { type: 'DASHBOARD', icon: '📊', label: 'Dash' },
-        { type: 'MANAGE', icon: '⚙️', label: 'Manage' },
-        { type: 'SETTINGS', icon: '🔧', label: 'Settings' }, // Fixed missing label for Settings in original code
+        { type: 'MORE', icon: '☰', label: 'More' },
     ];
 
     return (
         <View style={styles.tabBar}>
-            {tabs.map((tab) => (
-                <TouchableOpacity
-                    key={tab.type}
-                    style={[styles.tabItem, activeTab === tab.type && styles.activeTab]}
-                    onPress={() => setActiveTab(tab.type)}
-                    accessibilityLabel={tab.label}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: activeTab === tab.type }}
-                >
-                    <Text style={[styles.tabIcon, activeTab === tab.type && styles.activeTabText]}>{tab.icon}</Text>
-                    <Text style={[styles.tabText, activeTab === tab.type && styles.activeTabText]}>{tab.label}</Text>
-                </TouchableOpacity>
-            ))}
+            {tabs.map((tab) => {
+                const isActive = tab.type === 'MORE' ? isMoreActive : activeTab === tab.type;
+                return (
+                    <TouchableOpacity
+                        key={tab.type}
+                        style={[styles.tabItem, isActive && styles.activeTab]}
+                        onPress={() => setActiveTab(tab.type)}
+                        accessibilityLabel={tab.label}
+                        accessibilityRole="tab"
+                        accessibilityState={{ selected: isActive }}
+                        testID={`tab-${tab.type}`}
+                    >
+                        <Text style={[styles.tabIcon, isActive && styles.activeTabText]}>{tab.icon}</Text>
+                        <Text style={[styles.tabText, isActive && styles.activeTabText]}>{tab.label}</Text>
+                    </TouchableOpacity>
+                );
+            })}
         </View>
     );
 };

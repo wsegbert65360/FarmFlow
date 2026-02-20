@@ -53,7 +53,7 @@ export const runSprayVerification = async () => {
 
     // 3. Verify Snapshot
     console.log('[Step 3] Verifying initial snapshot...');
-    const snapshot = await db.getAll('SELECT * FROM spray_log_items WHERE spray_log_id = ?', [logId]);
+    const snapshot = (await db.getAll('SELECT * FROM spray_log_items WHERE spray_log_id = ?', [logId])) as any[];
     console.log('Initial Snapshot:', snapshot);
     if (snapshot.length !== 1 || snapshot[0].rate !== 32) {
         throw new Error('Snapshot verification failed: Initial state incorrect.');
@@ -65,7 +65,7 @@ export const runSprayVerification = async () => {
 
     // 5. Verify Snapshot REMAINS UNCHANGED
     console.log('[Step 5] Final verification of historical log...');
-    const finalSnapshot = await db.getAll('SELECT * FROM spray_log_items WHERE spray_log_id = ?', [logId]);
+    const finalSnapshot = (await db.getAll('SELECT * FROM spray_log_items WHERE spray_log_id = ?', [logId])) as any[];
     console.log('Final Snapshot (should be same as initial):', finalSnapshot);
 
     if (finalSnapshot[0].rate === 32) {

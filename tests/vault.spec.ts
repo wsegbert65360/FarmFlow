@@ -22,7 +22,7 @@ async function mockFarm(page: Page) {
 
         // Also add a mock recipe so the list isn't empty
         await db.execute(
-            `INSERT OR REPLACE INTO spray_recipes (id, name, farm_id, water_rate_per_acre, created_at)
+            `INSERT OR REPLACE INTO recipes (id, name, farm_id, water_rate_per_acre, created_at)
          VALUES (?, ?, ?, ?, ?)`,
             ['test-recipe-id', 'Corn Pre-Emergent', 'test-farm-id', 15, new Date().toISOString()]
         );

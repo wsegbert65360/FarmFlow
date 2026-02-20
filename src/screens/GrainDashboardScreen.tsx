@@ -216,6 +216,10 @@ export const GrainDashboardScreen = ({ onSelectAction, mode = 'MANAGE' }: GrainD
         const fullness = item.capacity ? (item.current_level || 0) / item.capacity : 0;
         const isQuickEditing = quickEditBinId === item.id;
 
+        let statusColor = Theme.colors.success;
+        if (fullness >= 0.95) statusColor = Theme.colors.danger; // Critical
+        else if (fullness >= 0.80) statusColor = Theme.colors.warning; // Warning
+
         return (
             <TouchableOpacity
                 activeOpacity={0.9}
@@ -227,13 +231,13 @@ export const GrainDashboardScreen = ({ onSelectAction, mode = 'MANAGE' }: GrainD
                         <Text style={styles.cardTitle}>{item.name}</Text>
                         <Text style={styles.cardSubtitle}>{item.crop_type}</Text>
                     </View>
-                    <View style={styles.statusBadge}>
-                        <Text style={styles.statusBadgeText}>{(fullness * 100).toFixed(0)}%</Text>
+                    <View style={[styles.statusBadge, { borderColor: statusColor, backgroundColor: statusColor + '20' }]}>
+                        <Text style={[styles.statusBadgeText, { color: statusColor }]}>{(fullness * 100).toFixed(0)}%</Text>
                     </View>
                 </View>
 
                 <View style={styles.progressContainer}>
-                    <View style={[styles.progressBar, { width: `${Math.min(fullness * 100, 100)}%` }]} />
+                    <View style={[styles.progressBar, { width: `${Math.min(fullness * 100, 100)}%`, backgroundColor: statusColor }]} />
                 </View>
 
                 <View style={styles.statsRow}>
@@ -271,10 +275,10 @@ export const GrainDashboardScreen = ({ onSelectAction, mode = 'MANAGE' }: GrainD
 
                 <View style={styles.cardActions}>
                     <TouchableOpacity
-                        style={[styles.actionButton, { backgroundColor: Theme.colors.success }]}
+                        style={[styles.actionButton, { backgroundColor: Theme.colors.success, borderColor: Theme.colors.success }]}
                         onPress={() => onSelectAction(item.id, item.name, 'HARVEST')}
                     >
-                        <Text style={styles.actionButtonText}>Log Harvest</Text>
+                        <Text style={[styles.actionButtonText, { color: 'white' }]}>Log Harvest</Text>
                     </TouchableOpacity>
                     <View style={{ width: Theme.spacing.md }} />
                     <TouchableOpacity

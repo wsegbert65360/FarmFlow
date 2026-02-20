@@ -72,28 +72,39 @@ export const ResponsiveLayout = ({ children, activeTab, setActiveTab, onSyncPres
 
                 <View style={styles.navGroup}>
                     <TouchableOpacity
-                        style={[styles.navItem, activeTab === 'FIELDS' && styles.navItemActive]}
-                        onPress={() => setActiveTab('FIELDS')}
+                        style={[styles.navItem, activeTab === 'LOG' && styles.navItemActive]}
+                        onPress={() => setActiveTab('LOG')}
+                        testID="tab-LOG"
                     >
-                        <Text style={[styles.navText, activeTab === 'FIELDS' && styles.navTextActive]}>Fields</Text>
+                        <Text style={[styles.navText, activeTab === 'LOG' && styles.navTextActive]}>🆕 Life Log</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                        style={[styles.navItem, activeTab === 'GRAIN' && styles.navItemActive]}
-                        onPress={() => setActiveTab('GRAIN')}
+                        style={[styles.navItem, activeTab === 'HISTORY' && styles.navItemActive]}
+                        onPress={() => setActiveTab('HISTORY')}
+                        testID="tab-HISTORY"
                     >
-                        <Text style={[styles.navText, activeTab === 'GRAIN' && styles.navTextActive]}>Grain Position</Text>
+                        <Text style={[styles.navText, activeTab === 'HISTORY' && styles.navTextActive]}>🕒 History & Docs</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                        style={[styles.navItem, activeTab === 'REPORTS' && styles.navItemActive]}
-                        onPress={() => setActiveTab('REPORTS')}
+                        style={[styles.navItem, activeTab === 'DASHBOARD' && styles.navItemActive]}
+                        onPress={() => setActiveTab('DASHBOARD')}
+                        testID="tab-DASHBOARD"
                     >
-                        <Text style={[styles.navText, activeTab === 'REPORTS' && styles.navTextActive]}>Reports & Compliance</Text>
+                        <Text style={[styles.navText, activeTab === 'DASHBOARD' && styles.navTextActive]}>📊 Executive Dash</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                        style={[styles.navItem, activeTab === 'VAULTS' && styles.navItemActive]}
-                        onPress={() => setActiveTab('VAULTS')}
+                        style={[styles.navItem, activeTab === 'MANAGE' && styles.navItemActive]}
+                        onPress={() => setActiveTab('MANAGE')}
+                        testID="tab-MANAGE"
                     >
-                        <Text style={[styles.navText, activeTab === 'VAULTS' && styles.navTextActive]}>Vault & Sync</Text>
+                        <Text style={[styles.navText, activeTab === 'MANAGE' && styles.navTextActive]}>🚜 Farm Assets</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.navItem, activeTab === 'SETTINGS' && styles.navItemActive]}
+                        onPress={() => setActiveTab('SETTINGS')}
+                        testID="tab-SETTINGS"
+                    >
+                        <Text style={[styles.navText, activeTab === 'SETTINGS' && styles.navTextActive]}>🔧 Unit Settings</Text>
                     </TouchableOpacity>
 
                     <View style={{ flex: 1 }} />
