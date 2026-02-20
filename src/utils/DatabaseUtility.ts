@@ -55,7 +55,7 @@ export const insertFarmRow = async (
         created_at: data.created_at || new Date().toISOString()
     };
 
-    if (userId && !record.user_id && table !== 'farms') {
+    if (userId && !record.user_id && table === 'farm_members') {
         record.user_id = userId;
     }
 
@@ -105,7 +105,7 @@ export const bulkInsertFarmRows = async (
                 created_at: data.created_at || new Date().toISOString()
             };
 
-            if (userId && !record.user_id && table !== 'farms') {
+            if (userId && !record.user_id && table === 'farm_members') {
                 record.user_id = userId;
             }
 
