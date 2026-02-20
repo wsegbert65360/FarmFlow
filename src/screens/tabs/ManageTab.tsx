@@ -8,14 +8,24 @@ import { VaultScreen } from '../VaultScreen';
 
 type ManageView = 'MENU' | 'FIELDS' | 'BINS_CONTRACTS' | 'REPORTS' | 'VAULT';
 
-export const ManageTab = () => {
-    const [view, setView] = useState<ManageView>('MENU');
+interface ManageTabProps {
+    onLogAction?: (action: { type: any, source: any, replacesLogId?: string }) => void;
+}
+
+export const ManageTab = ({ onLogAction }: ManageTabProps) => {
+    const [view, setView] = useState<ManageView>('FIELDS');
 
     if (view === 'FIELDS') {
         return (
             <View style={{ flex: 1 }}>
                 <BackButton onPress={() => setView('MENU')} title="Manage Fields" />
-                <FieldListScreen onSelectAction={() => { }} mode="MANAGE" />
+                <FieldListScreen
+                    onSelectAction={(f, type) => onLogAction?.({
+                        type,
+                        source: { id: f.id, name: f.name, acreage: f.acreage, type: 'FIELD' }
+                    })}
+                    mode="MANAGE"
+                />
             </View>
         );
     }

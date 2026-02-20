@@ -190,34 +190,52 @@ export const FieldListScreen = ({ onSelectAction, mode = 'MANAGE' }: FieldListPr
                                 </View>
                             )}
                         </View>
-                        <TouchableOpacity
-                            style={styles.actionButton}
-                            onPress={() => {
-                                setActionPickerVisible(false);
-                                if (selectedField) onSelectAction(selectedField, 'SPRAY');
-                            }}
-                            testID="action-start-spraying"
-                        >
-                            <Text style={styles.actionButtonText}>Start Spraying</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.actionButton}
-                            onPress={() => {
-                                setActionPickerVisible(false);
-                                if (selectedField) onSelectAction(selectedField, 'PLANTING');
-                            }}
-                        >
-                            <Text style={styles.actionButtonText}>Start Planting</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.actionButton}
-                            onPress={() => {
-                                setActionPickerVisible(false);
-                                if (selectedField) onSelectAction(selectedField, 'HARVEST');
-                            }}
-                        >
-                            <Text style={styles.actionButtonText}>Start Harvesting</Text>
-                        </TouchableOpacity>
+                        <View style={styles.actionGrid}>
+                            <PrettyActionButton
+                                title="Start Spraying"
+                                subtitle="Log chemical application"
+                                icon="🚿"
+                                color={Theme.colors.primary}
+                                onPress={() => {
+                                    setActionPickerVisible(false);
+                                    if (selectedField) onSelectAction(selectedField, 'SPRAY');
+                                }}
+                                testID="action-start-spraying"
+                            />
+                            <PrettyActionButton
+                                title="Start Planting"
+                                subtitle="Log seed placement"
+                                icon="🌱"
+                                color={Theme.colors.success}
+                                onPress={() => {
+                                    setActionPickerVisible(false);
+                                    if (selectedField) onSelectAction(selectedField, 'PLANTING');
+                                }}
+                            />
+                            <PrettyActionButton
+                                title="Start Harvesting"
+                                subtitle="Log yield to storage"
+                                icon="🚜"
+                                color={Theme.colors.warning}
+                                onPress={() => {
+                                    setActionPickerVisible(false);
+                                    if (selectedField) onSelectAction(selectedField, 'HARVEST');
+                                }}
+                            />
+                            <PrettyActionButton
+                                title="Harvest to Town"
+                                subtitle="Direct movement to elevator"
+                                icon="🚛"
+                                color={Theme.colors.secondary}
+                                onPress={() => {
+                                    setActionPickerVisible(false);
+                                    // In a real app, this would trigger a specific screen. 
+                                    // For now, we'll route it via the HARVEST_TO_TOWN type.
+                                    if (selectedField) onSelectAction(selectedField, 'HARVEST_TO_TOWN' as any);
+                                }}
+                                testID="action-harvest-to-town"
+                            />
+                        </View>
 
                         <TouchableOpacity
                             style={[styles.actionButton, { marginTop: 10, borderTopWidth: 1, borderTopColor: Theme.colors.border }]}
@@ -551,5 +569,36 @@ const styles = StyleSheet.create({
     logDate: { fontSize: 14, fontWeight: 'bold', marginTop: 2 },
     logDetail: { fontSize: 14, marginTop: 2, color: Theme.colors.text },
     correctButton: { backgroundColor: '#FFF3E0', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 4, borderWidth: 1, borderColor: Theme.colors.warning },
-    correctButtonText: { color: Theme.colors.warning, fontSize: 12, fontWeight: 'bold' }
+    correctButtonText: { color: Theme.colors.warning, fontSize: 12, fontWeight: 'bold' },
+    actionGrid: { marginTop: Theme.spacing.md },
+    prettyButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: Theme.spacing.lg,
+        borderRadius: Theme.borderRadius.md,
+        backgroundColor: Theme.colors.white,
+        marginBottom: Theme.spacing.md,
+        borderWidth: 1,
+        borderColor: Theme.colors.border,
+        ...Theme.shadows.sm,
+    },
+    prettyButtonIcon: { fontSize: 24, marginRight: Theme.spacing.md },
+    prettyButtonContent: { flex: 1 },
+    prettyButtonTitle: { ...Theme.typography.h2, color: Theme.colors.text },
+    prettyButtonSubtitle: { ...Theme.typography.caption, color: Theme.colors.textSecondary },
 });
+
+const PrettyActionButton = ({ title, subtitle, icon, color, onPress, testID }: { title: string, subtitle: string, icon: string, color: string, onPress: () => void, testID?: string }) => (
+    <TouchableOpacity
+        style={styles.prettyButton}
+        onPress={onPress}
+        testID={testID}
+    >
+        <Text style={styles.prettyButtonIcon}>{icon}</Text>
+        <View style={styles.prettyButtonContent}>
+            <Text style={[styles.prettyButtonTitle, { color }]}>{title}</Text>
+            <Text style={styles.prettyButtonSubtitle}>{subtitle}</Text>
+        </View>
+        <Text style={{ fontSize: 20, color: Theme.colors.border }}>›</Text>
+    </TouchableOpacity>
+);

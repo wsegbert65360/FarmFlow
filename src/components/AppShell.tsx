@@ -25,7 +25,7 @@ export const AppShell = () => {
     const { settings } = useSettings();
 
     // New Tabs
-    const [activeTab, setActiveTab] = useState<TabType>('LOG');
+    const [activeTab, setActiveTab] = useState<TabType>('MANAGE');
 
     // Farm Switcher
     const [showFarmSwitcher, setShowFarmSwitcher] = useState(false);
@@ -93,7 +93,7 @@ export const AppShell = () => {
             case 'DASHBOARD':
                 return <DashboardTab />;
             case 'MANAGE':
-                return <ManageTab />;
+                return <ManageTab onLogAction={setActiveLog} />;
             case 'SETTINGS':
                 return <SettingsTab />;
             case 'MORE':

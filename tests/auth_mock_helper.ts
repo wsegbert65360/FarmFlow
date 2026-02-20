@@ -32,5 +32,10 @@ export async function mockFarm(page: Page) {
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
             ['farm_config', 'Test Farm', 'Iowa', 'US', 1, 'test-farm-id', new Date().toISOString()]
         );
+
+        await db.execute(
+            `INSERT OR REPLACE INTO fields (id, name, acreage, farm_id, created_at) VALUES (?, ?, ?, ?, ?)`,
+            ['field-1', 'North 40', 40, 'test-farm-id', new Date().toISOString()]
+        );
     });
 }

@@ -15,8 +15,8 @@ export interface Bin {
 
 export interface GrainLog {
     id: string;
-    type: 'HARVEST' | 'DELIVERY' | 'ADJUSTMENT';
-    bin_id: string;
+    type: 'HARVEST' | 'DELIVERY' | 'ADJUSTMENT' | 'HARVEST_TO_TOWN';
+    bin_id: string | null;
     field_id: string | null;
     destination_type: 'BIN' | 'ELEVATOR';
     destination_name: string | null;
@@ -26,6 +26,7 @@ export interface GrainLog {
     notes?: string | null;
     start_time: string;
     end_time: string | null;
+    crop_type?: string;
 }
 
 export interface GrainLot {
@@ -117,21 +118,24 @@ export const useGrain = () => {
                 end_time: log.end_time || now
             });
 
-            // 2. Phase 2: Create Lot and Movement for HARVEST
-            if (log.type === 'HARVEST' && log.field_id) {
-                const bin = bins.find(b => b.id === log.bin_id);
-                const cropType = bin?.crop_type || 'Unknown';
+            // 2. Phase 2: Create Lot and Movement for HARVEST and HARVEST_TO_TOWN
+            if ((log.type === 'HARVEST' || log.type === 'HARVEST_TO_TOWN') && log.field_id) {
+                const bin = log.bin_id ? bins.find(b => b.id === log.bin_id) : null;
+                const cropType = log.crop_type || bin?.crop_type || 'Unknown';
                 const lotId = await getOrCreateLot(cropType, cropYear, log.field_id);
+                const movementToken = log.type === 'HARVEST_TO_TOWN' ? uuidv4().substring(0, 8).toUpperCase() : null;
 
                 await insertFarmRow('lot_movements', {
                     lot_id: lotId,
-                    movement_type: log.bin_id ? 'INTO_BIN' : 'DIRECT_TO_TOWN',
+                    movement_type: log.type === 'HARVEST_TO_TOWN' ? 'DIRECT_TO_TOWN' : 'INTO_BIN',
                     bin_id: log.bin_id || null,
-                    destination_name: log.destination_name || null,
+                    destination_name: log.type === 'HARVEST_TO_TOWN' ? (log.destination_name || 'Town Elevator') : null,
                     bushels_net: log.bushels_net,
                     moisture: log.moisture,
                     occurred_at: log.end_time || now,
-                    source_grain_log_id: id
+                    source_grain_log_id: id,
+                    status: log.type === 'HARVEST_TO_TOWN' ? 'IN_TRANSIT' : 'STATIONARY',
+                    movement_token: movementToken
                 });
             }
 

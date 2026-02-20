@@ -14,7 +14,7 @@ import { useSettings } from '../hooks/useSettings';
 import { parseNumericInput } from '../utils/NumberUtility';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
-export type LogType = 'SPRAY' | 'PLANTING' | 'HARVEST' | 'DELIVERY' | 'ADJUSTMENT';
+export type LogType = 'SPRAY' | 'PLANTING' | 'HARVEST' | 'DELIVERY' | 'ADJUSTMENT' | 'HARVEST_TO_TOWN';
 
 interface LogSessionProps {
     type: LogType;
@@ -229,7 +229,7 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
     }, [showSuccess, isReusing]);
 
     const handleLog = async (reuse = false) => {
-        if (!selectedItemId && type !== 'DELIVERY' && type !== 'HARVEST') {
+        if (!selectedItemId && type !== 'DELIVERY' && type !== 'HARVEST' && type !== 'HARVEST_TO_TOWN') {
             showAlert('Selection Required', 'Please select an item to continue.');
             return;
         }
@@ -308,6 +308,19 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                     notes: notes,
                     end_time: new Date().toISOString()
                 });
+            } else if (type === 'HARVEST_TO_TOWN') {
+                const fieldId = fixedType === 'FIELD' ? fixedId : null;
+                await addGrainLog({
+                    type: 'HARVEST_TO_TOWN',
+                    field_id: fieldId,
+                    bin_id: null,
+                    destination_type: 'ELEVATOR',
+                    destination_name: 'Town Elevator',
+                    bushels_net: parseNumericInput(bushels) || 0,
+                    moisture: parseNumericInput(moisture) || 15.0,
+                    notes: notes,
+                    end_time: new Date().toISOString()
+                });
             }
 
             setSaving(false);
@@ -349,7 +362,7 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                 <TouchableOpacity onPress={onClose} style={{ padding: 8, minHeight: 44, justifyContent: 'center' }} accessibilityLabel="Cancel Log" accessibilityRole="button">
                     <Text style={styles.closeText}>Cancel</Text>
                 </TouchableOpacity>
-                <Text style={styles.headerTitle} accessibilityRole="header">{type.replace('_', ' ')} Log</Text>
+                <Text style={styles.headerTitle} accessibilityRole="header">{type.replaceAll('_', ' ')} Log</Text>
                 <TouchableOpacity onPress={() => handleLog(false)} disabled={saving} style={{ padding: 8, minHeight: 44, justifyContent: 'center' }} accessibilityLabel="Save and Close" accessibilityRole="button" accessibilityState={{ disabled: saving }}>
                     <Text style={[styles.saveHeaderText, saving && { color: Theme.colors.textSecondary }]}>
                         {saving ? 'Saving' : 'SAVE'}

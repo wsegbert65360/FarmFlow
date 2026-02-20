@@ -43,6 +43,8 @@ export const GrainTables = {
             new Column({ name: 'source_grain_log_id', type: ColumnType.TEXT }),
             new Column({ name: 'created_at', type: ColumnType.TEXT }),
             new Column({ name: 'updated_at', type: ColumnType.TEXT }),
+            new Column({ name: 'status', type: ColumnType.TEXT }),
+            new Column({ name: 'movement_token', type: ColumnType.TEXT }),
         ],
     }),
 };
