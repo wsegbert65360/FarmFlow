@@ -1,4 +1,4 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { mockLogin, mockFarm } from './auth_mock_helper';
 
 test.describe('Visual Regression', () => {
@@ -9,38 +9,38 @@ test.describe('Visual Regression', () => {
     test('Dashboard responsive design', async ({ page }) => {
         await page.goto('/');
         await mockFarm(page);
-        // Capture snapshot for comparison
+
+        // Weather widget should be visible on all platforms
+        await expect(page.getByTestId('weather-widget')).toBeVisible();
+
+        // Responsive element checks
+        const viewport = page.viewportSize();
+        const isDesktop = viewport && viewport.width > 768;
+
+        if (!isDesktop) {
+            // Mobile specific
+            await expect(page.getByTestId('floating-action-button')).toBeVisible();
+            await expect(page.getByTestId('tab-MANAGE')).toBeVisible();
+        } else {
+            // Desktop specific
+            await expect(page.getByTestId('tab-MANAGE')).toBeVisible();
+            // Sidebar is usually always visible or handled by ResponsiveLayout
+        }
+
         await expect(page).toHaveScreenshot('dashboard.png');
     });
 
-    test('Vault list responsiveness', async ({ page }) => {
+    test('More menu responsiveness', async ({ page }) => {
         await page.goto('/');
         await mockFarm(page);
 
-        // Navigate to Vault (Responsive)
         const moreTab = page.getByTestId('tab-MORE');
-        const manageTab = page.getByTestId('tab-MANAGE');
+        await expect(moreTab).toBeVisible();
+        await moreTab.click();
 
-        // Wait for layout to settle
-        await Promise.race([
-            moreTab.waitFor({ state: 'visible', timeout: 10000 }).catch(() => { }),
-            manageTab.waitFor({ state: 'visible', timeout: 10000 }).catch(() => { })
-        ]);
+        await expect(page.getByTestId('more-title')).toBeVisible();
+        await expect(page.getByTestId('more-manage-btn')).toBeVisible();
 
-        if (await moreTab.isVisible()) {
-            await moreTab.click({ force: true });
-            await expect(page.getByTestId('more-manage-btn')).toBeVisible({ timeout: 10000 });
-            await page.getByTestId('more-manage-btn').click({ force: true });
-        } else {
-            await expect(manageTab).toBeVisible({ timeout: 10000 });
-            await manageTab.click({ force: true });
-        }
-
-        await expect(page.getByTestId('manage-vault-btn')).toBeVisible({ timeout: 10000 });
-        await page.getByTestId('manage-vault-btn').click({ force: true });
-        await expect(page.getByTestId('vault-list')).toBeVisible();
-        await page.waitForTimeout(1000); // Allow Safari to render/animate
-
-        await expect(page).toHaveScreenshot('vault-list.png');
+        await expect(page).toHaveScreenshot('more-menu.png');
     });
 });

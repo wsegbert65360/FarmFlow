@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Theme } from '../../constants/Theme';
 
 interface Props {
@@ -33,13 +33,24 @@ export class ErrorBoundary extends Component<Props, State> {
         if (this.state.hasError) {
             return (
                 <View style={styles.container}>
-                    <Text style={styles.title}>Something went wrong.</Text>
+                    <Text style={styles.title}>Critical Error</Text>
                     <Text style={styles.subtitle}>
-                        {this.state.error?.message || 'An unexpected error occurred.'}
+                        FarmFlow encountered a crash. We've captured the details below:
                     </Text>
+                    <View style={styles.errorBox}>
+                        <Text style={styles.errorText}>
+                            {this.state.error?.name}: {this.state.error?.message}
+                        </Text>
+                        <Text style={styles.stackText}>
+                            {this.state.error?.stack?.split('\n').slice(0, 5).join('\n')}
+                        </Text>
+                    </View>
                     <TouchableOpacity style={styles.button} onPress={this.handleReset}>
-                        <Text style={styles.buttonText}>Attempt Recovery</Text>
+                        <Text style={styles.buttonText}>Reload Application</Text>
                     </TouchableOpacity>
+                    <Text style={styles.footer}>
+                        Please send a screenshot of this error to support.
+                    </Text>
                 </View>
             );
         }
@@ -76,5 +87,32 @@ const styles = StyleSheet.create({
     buttonText: {
         color: 'white',
         fontWeight: 'bold'
+    },
+    errorBox: {
+        backgroundColor: '#FFF0F0',
+        padding: 15,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#FFC0C0',
+        width: '100%',
+        marginVertical: 20,
+    },
+    errorText: {
+        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+        fontSize: 14,
+        color: '#D00',
+        fontWeight: 'bold',
+        marginBottom: 8,
+    },
+    stackText: {
+        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+        fontSize: 12,
+        color: '#666',
+    },
+    footer: {
+        marginTop: 30,
+        fontSize: 12,
+        color: Theme.colors.textSecondary,
+        textAlign: 'center',
     }
 });

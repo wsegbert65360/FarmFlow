@@ -227,9 +227,10 @@ export const executeIdempotent = async (
     operation: () => Promise<string | void>
 ): Promise<string | void> => {
     const existing = await db.execute(checkQuery, params);
-    if (existing.rows && existing.rows.length > 0) {
+    const rows = existing.rows?._array || (existing.rows && existing.rows.length > 0 ? [existing.rows.item(0)] : []);
+    if (rows.length > 0) {
         console.warn('[Idempotency] Operation skipped: record already exists.');
-        return existing.rows.item(0).id;
+        return rows[0].id;
     }
     return await operation();
 };

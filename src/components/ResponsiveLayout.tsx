@@ -25,7 +25,7 @@ export const ResponsiveLayout = ({ children, activeTab, setActiveTab, onSyncPres
     }
 
     return (
-        <View style={styles.desktopContainer}>
+        <View style={[styles.desktopContainer, { flexDirection: 'row', flex: 1, width: '100%' }]}>
             <View style={styles.sidebar}>
                 <View style={styles.sidebarHeader}>
                     <View style={{ flex: 1 }}>
@@ -72,39 +72,25 @@ export const ResponsiveLayout = ({ children, activeTab, setActiveTab, onSyncPres
 
                 <View style={styles.navGroup}>
                     <TouchableOpacity
-                        style={[styles.navItem, activeTab === 'LOG' && styles.navItemActive]}
-                        onPress={() => setActiveTab('LOG')}
-                        testID="tab-LOG"
+                        style={[styles.navItem, activeTab === 'MANAGE' && styles.navItemActive]}
+                        onPress={() => setActiveTab('MANAGE')}
+                        testID="tab-MANAGE"
                     >
-                        <Text style={[styles.navText, activeTab === 'LOG' && styles.navTextActive]}>🆕 Life Log</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.navItem, activeTab === 'HISTORY' && styles.navItemActive]}
-                        onPress={() => setActiveTab('HISTORY')}
-                        testID="tab-HISTORY"
-                    >
-                        <Text style={[styles.navText, activeTab === 'HISTORY' && styles.navTextActive]}>🕒 History & Docs</Text>
+                        <Text style={[styles.navText, activeTab === 'MANAGE' && styles.navTextActive]}>🚜 Fields</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.navItem, activeTab === 'DASHBOARD' && styles.navItemActive]}
                         onPress={() => setActiveTab('DASHBOARD')}
                         testID="tab-DASHBOARD"
                     >
-                        <Text style={[styles.navText, activeTab === 'DASHBOARD' && styles.navTextActive]}>📊 Executive Dash</Text>
+                        <Text style={[styles.navText, activeTab === 'DASHBOARD' && styles.navTextActive]}>📊 Grain</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                        style={[styles.navItem, activeTab === 'MANAGE' && styles.navItemActive]}
-                        onPress={() => setActiveTab('MANAGE')}
-                        testID="tab-MANAGE"
+                        style={[styles.navItem, activeTab === 'MORE' && styles.navItemActive]}
+                        onPress={() => setActiveTab('MORE')}
+                        testID="tab-MORE"
                     >
-                        <Text style={[styles.navText, activeTab === 'MANAGE' && styles.navTextActive]}>🚜 Farm Assets</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.navItem, activeTab === 'SETTINGS' && styles.navItemActive]}
-                        onPress={() => setActiveTab('SETTINGS')}
-                        testID="tab-SETTINGS"
-                    >
-                        <Text style={[styles.navText, activeTab === 'SETTINGS' && styles.navTextActive]}>🔧 Unit Settings</Text>
+                        <Text style={[styles.navText, activeTab === 'MORE' && styles.navTextActive]}>🔧 More</Text>
                     </TouchableOpacity>
 
                     <View style={{ flex: 1 }} />
@@ -121,7 +107,7 @@ export const ResponsiveLayout = ({ children, activeTab, setActiveTab, onSyncPres
                     <Text style={styles.versionText}>FarmFlow v4.1.1-PRO</Text>
                 </View>
             </View>
-            <View style={styles.mainContent}>
+            <View style={[styles.mainContent, { flex: 1, height: '100%' }]}>
                 {children}
             </View>
         </View>

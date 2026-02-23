@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, StatusBar, TouchableOpacity, Image, useWindowDimensions } from 'react-native';
+import { StyleSheet, Text, View, SafeAreaView, StatusBar, TouchableOpacity, Image, useWindowDimensions, Modal } from 'react-native';
 import { Theme } from '../constants/Theme';
 import { useSettings } from '../hooks/useSettings';
 import { SyncStatusPill } from './SyncStatusPill';
 import { ResponsiveLayout } from './ResponsiveLayout';
 import { StatusOverlay } from './StatusOverlay';
 
-import { LogTab } from '../screens/tabs/LogTab';
-import { HistoryTab } from '../screens/tabs/HistoryTab';
+// Unused tabs removed to prevent potential circular dependencies
 import { DashboardTab } from '../screens/tabs/DashboardTab';
 import { ManageTab } from '../screens/tabs/ManageTab';
 import { SettingsTab } from '../screens/tabs/SettingsTab';
@@ -20,6 +19,9 @@ import { AuthContext } from '../context/AuthProvider';
 import { FarmSwitcherModal } from './modals/FarmSwitcherModal';
 import { TabBar, TabType } from './navigation/TabBar';
 import { ErrorBoundary } from './common/ErrorBoundary';
+import { WeatherWidget } from './WeatherWidget';
+import { FloatingActionButton } from './common/FloatingActionButton';
+import { FieldListScreen } from '../screens/FieldListScreen';
 
 export const AppShell = () => {
     const { settings } = useSettings();
@@ -29,6 +31,7 @@ export const AppShell = () => {
 
     // Farm Switcher
     const [showFarmSwitcher, setShowFarmSwitcher] = useState(false);
+    const [showActivityMenu, setShowActivityMenu] = useState(false);
     const [myFarms, setMyFarms] = useState<{ id: string, name: string }[]>([]);
     const { switchFarm } = useContext(AuthContext);
     const { user } = useAuth();
@@ -74,32 +77,24 @@ export const AppShell = () => {
 
     const getTabTitle = (tab: TabType) => {
         switch (tab) {
-            case 'LOG': return 'Log Activity';
-            case 'HISTORY': return 'History';
-            case 'DASHBOARD': return 'Dashboard';
-            case 'MANAGE': return 'Manage';
-            case 'SETTINGS': return 'Settings';
+            case 'MANAGE': return 'Fields';
+            case 'DASHBOARD': return 'Grain';
             case 'MORE': return 'More';
             default: return 'FarmFlow';
         }
     };
 
     const renderContent = () => {
+        console.log('[AppShell] Rendering activeTab:', activeTab);
         switch (activeTab) {
-            case 'LOG':
-                return <LogTab onLogAction={setActiveLog} />;
-            case 'HISTORY':
-                return <HistoryTab />;
+            case 'MANAGE':
+                return <FieldListScreen />;
             case 'DASHBOARD':
                 return <DashboardTab />;
-            case 'MANAGE':
-                return <ManageTab onLogAction={setActiveLog} />;
-            case 'SETTINGS':
-                return <SettingsTab />;
             case 'MORE':
                 return <MoreTab />;
             default:
-                return <LogTab onLogAction={setActiveLog} />;
+                return <FieldListScreen />;
         }
     };
 
@@ -110,20 +105,39 @@ export const AppShell = () => {
 
 
             {!isDesktop && (
-                <View style={styles.header}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View
+                    className="flex-row justify-between items-center px-6 py-4 bg-white border-b border-gray-100"
+                    style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', height: 72 }}
+                >
+                    <View className="flex-row items-center" style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Image
                             source={require('../../assets/icon.png')}
-                            style={{ width: 40, height: 40, marginRight: 12, borderRadius: 8 }}
+                            className="w-10 h-10 mr-3 rounded-xl"
+                            style={{ width: 40, height: 40, marginRight: 12, borderRadius: 12 }}
                         />
-                        <View>
-                            <TouchableOpacity onPress={() => setShowFarmSwitcher(true)}>
-                                <Text style={styles.headerTitle}>{getTabTitle(activeTab)} ▾</Text>
-                            </TouchableOpacity>
-                            <HeaderHelper activeTab={activeTab} />
-                        </View>
+                        <TouchableOpacity
+                            onPress={() => setShowFarmSwitcher(true)}
+                            testID="header-farm-name"
+                        >
+                            <Text className="text-2xl font-bold text-gray-900" style={{ fontSize: 24, fontWeight: 'bold' }}>FarmFlow</Text>
+                        </TouchableOpacity>
                     </View>
-                    <SyncStatusPill />
+
+                    <View className="flex-row items-center" style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View
+                            className="flex-row items-center bg-green-50 px-3 py-1 rounded-full mr-3 border border-green-100"
+                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 9999, marginRight: 12, borderWidth: 1, borderColor: '#DCFCE7' }}
+                        >
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#22C55E', marginRight: 8 }} />
+                            <Text style={{ color: '#15803D', fontSize: 10, fontWeight: 'bold' }}>ONLINE</Text>
+                        </View>
+                        <Image
+                            source={{ uri: 'https://i.pravatar.cc/100?u=' + (user?.id || 'default') }}
+                            className="w-10 h-10 rounded-full border-2 border-white shadow-sm"
+                            style={{ width: 40, height: 40, borderRadius: 20 }}
+                            testID="header-avatar"
+                        />
+                    </View>
                 </View>
             )}
 
@@ -145,9 +159,16 @@ export const AppShell = () => {
 
                 <ErrorBoundary>
                     <View style={styles.mainContent}>
+                        {activeTab === 'MANAGE' && <WeatherWidget />}
                         {renderContent()}
                     </View>
                 </ErrorBoundary>
+
+                {!isDesktop && (
+                    <FloatingActionButton
+                        onPress={() => setShowActivityMenu(true)}
+                    />
+                )}
             </ResponsiveLayout>
 
             {!isDesktop && (
@@ -161,9 +182,68 @@ export const AppShell = () => {
                 currentFarmId={settings?.farm_id}
                 onSwitchFarm={handleSwitchFarm}
             />
+
+            <Modal visible={showActivityMenu} transparent animationType="slide">
+                <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                    <View style={{ backgroundColor: 'white', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 32, paddingBottom: 48 }}>
+                        <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 24 }}>New Activity</Text>
+
+                        <MenuButton
+                            title="Planting"
+                            icon="🌱"
+                            onPress={() => {
+                                setShowActivityMenu(false);
+                                setActiveLog({ type: 'PLANTING', source: { id: '', name: 'Select Field', type: 'FIELD' } });
+                            }}
+                        />
+                        <MenuButton
+                            title="Spraying"
+                            icon="🚿"
+                            onPress={() => {
+                                setShowActivityMenu(false);
+                                setActiveLog({ type: 'SPRAY', source: { id: '', name: 'Select Field', type: 'FIELD' } });
+                            }}
+                        />
+                        <MenuButton
+                            title="Harvest"
+                            icon="🚜"
+                            onPress={() => {
+                                setShowActivityMenu(false);
+                                setActiveLog({ type: 'HARVEST_TO_TOWN', source: { id: '', name: 'Select Field', type: 'FIELD' } });
+                            }}
+                        />
+
+                        <TouchableOpacity
+                            onPress={() => setShowActivityMenu(false)}
+                            style={{ marginTop: 16, padding: 16 }}
+                        >
+                            <Text style={{ textAlign: 'center', color: '#ef4444', fontWeight: 'bold' }}>Close</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 };
+
+const MenuButton = ({ title, icon, onPress }: { title: string, icon: string, onPress: () => void }) => (
+    <TouchableOpacity
+        style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#f9fafb',
+            padding: 20,
+            borderRadius: 16,
+            marginBottom: 12,
+            borderWidth: 1,
+            borderColor: '#f3f4f6'
+        }}
+        onPress={onPress}
+    >
+        <Text style={{ fontSize: 24, marginRight: 16 }}>{icon}</Text>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#111827' }}>{title}</Text>
+    </TouchableOpacity>
+);
 
 const styles = StyleSheet.create({
     safeArea: { flex: 1, backgroundColor: Theme.colors.background },

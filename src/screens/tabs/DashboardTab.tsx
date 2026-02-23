@@ -8,8 +8,8 @@ export const DashboardTab = () => {
     const { bins } = useGrain();
     const { contracts } = useContracts();
 
-    const totalCapacity = bins.reduce((acc, b) => acc + (b.capacity || 0), 0);
-    const totalLevel = bins.reduce((acc, b) => acc + (b.current_level || 0), 0);
+    const totalCapacity = (bins || []).reduce((acc, b) => acc + (b.capacity || 0), 0);
+    const totalLevel = (bins || []).reduce((acc, b) => acc + (b.current_level || 0), 0);
     const percentFull = totalCapacity ? (totalLevel / totalCapacity) * 100 : 0;
 
     return (

@@ -30,12 +30,16 @@ export const useContracts = () => {
             WHERE c.farm_id = ?
         `;
 
-        watchFarmQuery(
+        const unsubscribe = watchFarmQuery(
             query,
             [farmId],
             {
                 onResult: (result: any) => {
-                    setContracts(result.rows?._array || []);
+                    const rows = result.rows?._array || [];
+                    setContracts(prev => {
+                        if (JSON.stringify(prev) === JSON.stringify(rows)) return prev;
+                        return rows;
+                    });
                     setLoading(false);
                 },
                 onError: (error: any) => {
@@ -45,8 +49,11 @@ export const useContracts = () => {
             }
         );
 
-        return () => abortController.abort();
-    }, [farmId]);
+        return () => {
+            abortController.abort();
+            unsubscribe();
+        };
+    }, [farmId, watchFarmQuery]);
 
     const addContract = async (contract: Omit<Contract, 'id' | 'delivered_bushels'>) => {
         try {

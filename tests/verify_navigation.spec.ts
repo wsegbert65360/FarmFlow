@@ -11,46 +11,29 @@ test('verify navigation architecture', async ({ page }) => {
     // 3. Setup mock farm data
     await mockFarm(page);
 
-    // 4. Wait for Tab Bar buttons (LOG is always visible)
-    const logTab = page.getByTestId('tab-LOG');
-    await expect(logTab).toBeVisible();
-    await expect(page.getByTestId('tab-HISTORY')).toBeVisible();
-    await expect(page.getByTestId('tab-DASHBOARD')).toBeVisible();
-
-    // 5. Navigate to Settings (Responsive)
+    // 4. Wait for Tab Bar buttons
+    const manageTab = page.getByTestId('tab-MANAGE');
+    const dashboardTab = page.getByTestId('tab-DASHBOARD');
     const moreTab = page.getByTestId('tab-MORE');
-    const settingsTab = page.getByTestId('tab-SETTINGS');
 
-    // Wait for layout to settle
-    await Promise.race([
-        moreTab.waitFor({ state: 'visible', timeout: 10000 }).catch(() => { }),
-        settingsTab.waitFor({ state: 'visible', timeout: 10000 }).catch(() => { })
-    ]);
+    await expect(manageTab).toBeVisible();
+    await expect(dashboardTab).toBeVisible();
+    await expect(moreTab).toBeVisible();
 
-    if (await moreTab.isVisible()) {
-        // MOBILE FLOW
-        await moreTab.click({ force: true });
-        await expect(page.getByTestId('more-manage-btn')).toBeVisible({ timeout: 10000 });
-        await expect(page.getByTestId('more-settings-btn')).toBeVisible({ timeout: 10000 });
-        await page.getByTestId('more-settings-btn').click({ force: true });
-    } else {
-        // DESKTOP FLOW
-        await expect(settingsTab).toBeVisible({ timeout: 10000 });
-        await settingsTab.click({ force: true });
-    }
+    // 5. Verify Fields (Manage) content
+    await manageTab.click();
+    await expect(page.getByTestId('weather-widget')).toBeVisible();
+    await expect(page.getByText(/Good to/i)).toBeVisible();
 
-    // 6. Wait for Settings content
-    await expect(page.getByText('Sign Out')).toBeVisible();
+    // 6. Navigate to Grain (Dashboard)
+    await dashboardTab.click();
+    // Assuming dashboard has some text we can verify
+    // await expect(page.getByText('Grain Inventory')).toBeVisible(); 
 
-    // 7. Back to home
-    if (await moreTab.isVisible()) {
-        await page.getByTestId('more-back-btn').click();
-        await expect(page.getByTestId('more-manage-btn')).toBeVisible();
-        await page.getByTestId('tab-LOG').click();
-    } else {
-        await logTab.click();
-    }
-
-    // Verify we are back
-    await expect(page.getByText('New Log Entry')).toBeVisible();
+    // 7. Navigate to More
+    await moreTab.click();
+    // Look for more-specific buttons inside the More tab
+    await expect(page.getByTestId('more-title')).toBeVisible();
+    await expect(page.getByTestId('more-manage-btn')).toBeVisible();
+    await expect(page.getByTestId('more-settings-btn')).toBeVisible();
 });

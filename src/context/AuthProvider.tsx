@@ -25,15 +25,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // 1. Get initial session
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            setLoading(false);
-        });
+        // 1. Get initial session with safety timeout
+        console.log('[AuthProvider] Getting initial session...');
+
+        const timeout = setTimeout(() => {
+            if (loading) {
+                console.warn('[AuthProvider] Initial session fetch timed out after 5s, forcing loading to false.');
+                setLoading(false);
+            }
+        }, 5000);
+
+        supabase.auth.getSession()
+            .then(({ data: { session } }) => {
+                console.log('[AuthProvider] Initial session:', session ? `User: ${session.user.email}` : 'None');
+                clearTimeout(timeout);
+                setSession(session);
+                setLoading(false);
+            })
+            .catch(error => {
+                console.error('[AuthProvider] Failed to get initial session:', error);
+                clearTimeout(timeout);
+                setLoading(false); // Proceed to login screen anyway
+            });
 
         // 2. Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setSession(session);
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+            setSession(prev => {
+                // Prevent update if same session
+                if (JSON.stringify(prev) === JSON.stringify(newSession)) return prev;
+                return newSession;
+            });
             setLoading(false);
         });
 

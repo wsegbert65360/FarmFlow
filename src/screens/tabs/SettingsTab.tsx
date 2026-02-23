@@ -26,7 +26,9 @@ export const SettingsTab = () => {
 
             <View style={styles.section}>
                 <Text style={styles.label}>Last Synced</Text>
-                <Text style={styles.value}>{lastSyncedAt ? lastSyncedAt.toLocaleString() : 'Never'}</Text>
+                <Text style={styles.value}>
+                    {lastSyncedAt ? (typeof lastSyncedAt === 'object' && lastSyncedAt.toLocaleString ? lastSyncedAt.toLocaleString() : String(lastSyncedAt)) : 'Never'}
+                </Text>
                 <TouchableOpacity onPress={sync} style={styles.button}>
                     <Text style={styles.buttonText}>Force Sync</Text>
                 </TouchableOpacity>

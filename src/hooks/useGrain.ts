@@ -64,7 +64,7 @@ export const useGrain = () => {
         const abortController = new AbortController();
 
         // Watch bins with level calculation (Sum of INTO_BIN - Sum of OUT_OF_BIN)
-        watchFarmQuery(
+        const unsubscribe = watchFarmQuery(
             `SELECT b.*, 
                 (SELECT COALESCE(SUM(bushels_net), 0) FROM lot_movements WHERE bin_id = b.id AND movement_type = 'INTO_BIN') - 
                 (SELECT COALESCE(SUM(bushels_net), 0) FROM lot_movements WHERE bin_id = b.id AND movement_type = 'OUT_OF_BIN') as current_level
@@ -73,15 +73,21 @@ export const useGrain = () => {
             [farmId],
             {
                 onResult: (result: any) => {
-                    setBins(result.rows?._array || []);
+                    const rows = result.rows?._array || [];
+                    setBins(prev => {
+                        if (JSON.stringify(prev) === JSON.stringify(rows)) return prev;
+                        return rows;
+                    });
                 },
                 onError: (e: any) => console.error('Failed to watch bins', e)
             }
         );
 
-        // ... (rest of search/watch remains same)
-        return () => abortController.abort();
-    }, [farmId]);
+        return () => {
+            abortController.abort();
+            unsubscribe();
+        };
+    }, [farmId, watchFarmQuery]);
 
     const getOrCreateLot = async (cropType: string, cropYear: number, fieldId: string) => {
         const existing = await db.getAll<GrainLot>(

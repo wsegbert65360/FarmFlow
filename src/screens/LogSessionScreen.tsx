@@ -362,7 +362,7 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                 <TouchableOpacity onPress={onClose} style={{ padding: 8, minHeight: 44, justifyContent: 'center' }} accessibilityLabel="Cancel Log" accessibilityRole="button">
                     <Text style={styles.closeText}>Cancel</Text>
                 </TouchableOpacity>
-                <Text style={styles.headerTitle} accessibilityRole="header">{type.replaceAll('_', ' ')} Log</Text>
+                <Text style={styles.headerTitle} accessibilityRole="header">{type.replace(/_/g, ' ')} Log</Text>
                 <TouchableOpacity onPress={() => handleLog(false)} disabled={saving} style={{ padding: 8, minHeight: 44, justifyContent: 'center' }} accessibilityLabel="Save and Close" accessibilityRole="button" accessibilityState={{ disabled: saving }}>
                     <Text style={[styles.saveHeaderText, saving && { color: Theme.colors.textSecondary }]}>
                         {saving ? 'Saving' : 'SAVE'}

@@ -20,7 +20,7 @@ export const useSettings = () => {
     useEffect(() => {
         const abortController = new AbortController();
 
-        db.watch(
+        const unsubscribe = db.watch(
             'SELECT * FROM settings WHERE id = ?',
             ['farm_config'],
             {
@@ -28,7 +28,7 @@ export const useSettings = () => {
                     const rows = result.rows?._array || [];
                     if (rows.length > 0) {
                         const row = rows[0];
-                        setSettings({
+                        const newSettings: Settings = {
                             farm_name: row.farm_name,
                             state: row.state,
                             units: row.units as 'US' | 'Metric',
@@ -37,6 +37,14 @@ export const useSettings = () => {
                             default_applicator_cert: row.default_applicator_cert || '',
                             farm_id: row.farm_id || '',
                             farm_join_token: row.farm_join_token || '',
+                        };
+
+                        setSettings(prev => {
+                            // Deep comparison using serialization
+                            if (JSON.stringify(prev) === JSON.stringify(newSettings)) {
+                                return prev;
+                            }
+                            return newSettings;
                         });
                     } else {
                         setSettings(null);
@@ -44,14 +52,16 @@ export const useSettings = () => {
                     setLoading(false);
                 },
                 onError: (error) => {
-                    console.error('Failed to watch settings', error);
                     setLoading(false);
                 }
             },
             { signal: abortController.signal }
         );
 
-        return () => abortController.abort();
+        return () => {
+            abortController.abort();
+            if (typeof unsubscribe === 'function') (unsubscribe as any)();
+        };
     }, []);
 
     const saveSettings = async (updated: Partial<Settings>) => {
@@ -59,12 +69,11 @@ export const useSettings = () => {
             const current = settings || {
                 farm_name: '',
                 state: '',
-                units: 'US', // Default to US for this application
+                units: 'US' as const,
                 onboarding_completed: false,
                 farm_id: uuidv4(),
                 default_applicator_name: '',
                 default_applicator_cert: '',
-                supabase_anon_key: '',
                 farm_join_token: ''
             };
 

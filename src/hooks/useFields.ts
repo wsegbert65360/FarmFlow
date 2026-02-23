@@ -13,6 +13,11 @@ export interface Field {
     last_gps_lat?: number;
     last_gps_long?: number;
     distance?: number;
+    // Metadata for card
+    crop?: string;
+    variety?: string;
+    planted_date?: string;
+    sync_status?: 'SYNCED' | 'PENDING';
 }
 
 export const useFields = () => {
@@ -44,12 +49,39 @@ export const useFields = () => {
         if (!farmId) return;
         const abortController = new AbortController();
 
-        watchFarmQuery(
-            'SELECT * FROM fields WHERE farm_id = ?',
+        const unsubscribe = watchFarmQuery(
+            `SELECT 
+                f.*,
+                latest_pl.variety_name as variety,
+                latest_pl.brand as brand,
+                latest_pl.start_time as planted_date,
+                latest_pl.seed_type as crop
+             FROM fields f
+             LEFT JOIN (
+                SELECT pl.field_id, pl.start_time, sv.variety_name, sv.brand, sv.type as seed_type
+                FROM planting_logs pl
+                JOIN seed_varieties sv ON pl.seed_id = sv.id
+                WHERE (pl.field_id, pl.start_time) IN (
+                    SELECT field_id, MAX(start_time)
+                    FROM planting_logs
+                    GROUP BY field_id
+                )
+             ) latest_pl ON f.id = latest_pl.field_id
+             WHERE f.farm_id = ?
+             ORDER BY f.name ASC`,
             [farmId],
             {
                 onResult: (result: any) => {
-                    setFields(result.rows?._array || []);
+                    const rows = result.rows?._array || [];
+                    const mapped = rows.map((r: any) => ({
+                        ...r,
+                        sync_status: 'SYNCED'
+                    }));
+
+                    setFields(prev => {
+                        if (JSON.stringify(prev) === JSON.stringify(mapped)) return prev;
+                        return mapped;
+                    });
                     setLoading(false);
                 },
                 onError: (error: any) => {
@@ -59,8 +91,11 @@ export const useFields = () => {
             }
         );
 
-        return () => abortController.abort();
-    }, [farmId]);
+        return () => {
+            abortController.abort();
+            unsubscribe();
+        };
+    }, [farmId, watchFarmQuery]);
 
     const addField = async (name: string, acreage: number, lat?: number, long?: number) => {
         try {

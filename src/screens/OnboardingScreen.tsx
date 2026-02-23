@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, SafeAreaView, Modal } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, SafeAreaView, Modal, Platform, ActivityIndicator } from 'react-native';
 import { showAlert } from '../utils/AlertUtility';
 import { Theme } from '../constants/Theme';
 import { useSettings } from '../hooks/useSettings';
@@ -11,7 +11,7 @@ import { useFarms } from '../hooks/useFarms';
 
 export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => {
     const { saveSettings } = useSettings();
-    const { farms, acceptInvite, switchFarm } = useFarms();
+    const { farms, acceptInvite, switchFarm, loading: farmsLoading } = useFarms();
     const [farmName, setFarmName] = useState('');
     const [state, setState] = useState('');
     const [units, setUnits] = useState<'US' | 'Metric'>('US');
@@ -126,17 +126,33 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: () => void }) => 
         <SafeAreaView style={styles.container}>
             <ScrollView contentContainerStyle={styles.content}>
                 <Text style={styles.title}>Welcome to FarmFlow</Text>
-                <Text style={styles.subtitle}>The simple, secure Anti-ERP for modern farms.</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={styles.subtitle}>The simple, secure Anti-ERP for modern farms.</Text>
+                    <TouchableOpacity
+                        onPress={async () => {
+                            await connector.client.auth.signOut();
+                            if (Platform.OS === 'web') window.location.reload();
+                        }}
+                        style={{ padding: 10, marginTop: -20 }}
+                    >
+                        <Text style={{ color: Theme.colors.primary, fontWeight: 'bold' }}>Sign Out</Text>
+                    </TouchableOpacity>
+                </View>
 
                 <View style={styles.modeToggle}>
-                    {farms.length > 0 && (
+                    {farmsLoading ? (
+                        <View style={{ flex: 1, padding: 10, justifyContent: 'center' }}>
+                            <ActivityIndicator size="small" color={Theme.colors.primary} />
+                            <Text style={{ textAlign: 'center', fontSize: 10, color: Theme.colors.textSecondary }}>Checking for existing farms...</Text>
+                        </View>
+                    ) : farms.length > 0 ? (
                         <TouchableOpacity
                             style={[styles.modeButton, mode === 'SWITCH' && styles.modeActive]}
                             onPress={() => setMode('SWITCH')}
                         >
                             <Text style={[styles.modeText, mode === 'SWITCH' && styles.textWhite]}>Switch Farm</Text>
                         </TouchableOpacity>
-                    )}
+                    ) : null}
                     <TouchableOpacity
                         style={[styles.modeButton, mode === 'NEW' && styles.modeActive]}
                         onPress={() => setMode('NEW')}

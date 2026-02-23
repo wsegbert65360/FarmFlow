@@ -11,6 +11,7 @@ export interface SyncState {
     lastSyncedAt: Date | null;
     lastError: string | null;
     isConnected: boolean;
+    isHydrated: boolean;
 }
 
 class SyncController {
@@ -21,12 +22,15 @@ class SyncController {
         lastSyncedAt: null,
         lastError: null,
         isConnected: false,
+        isHydrated: false,
     };
     private listeners: ((state: SyncState) => void)[] = [];
-    private errorLog: string[] = [];
     private networkUnsubscribe: (() => void) | null = null;
+    private errorLog: string[] = [];
     private dbUnsubscribe: (() => void) | null = null;
     private initialized = false;
+    private syncingPromise: Promise<void> | null = null;
+    private userId: string | null = null;
 
     constructor() {
         // Initial network check
@@ -34,16 +38,20 @@ class SyncController {
     }
 
     init(userId: string) {
-        if (this.initialized) return;
+        if (this.initialized && this.userId === userId) return;
         this.initialized = true;
+        this.userId = userId;
 
+        console.log(`[SyncController] Initializing for user: ${userId}`);
         // Listen to PowerSync status
+        if (this.dbUnsubscribe) this.dbUnsubscribe();
         this.dbUnsubscribe = db.registerListener({
             statusChanged: (status: any) => {
+                console.log('[SyncController] DB Status Change:', status.connected ? 'Connected' : 'Disconnected', status.lastSyncedAt ? `Last Sync: ${status.lastSyncedAt}` : '');
                 this.updateState({
                     lastSyncedAt: status.lastSyncedAt || this.state.lastSyncedAt,
                     lastError: status.uploadError?.message || status.downloadError?.message || null,
-                    pendingUploads: status.uploading ? 1 : 0, // Simplified, PowerSync doesn't expose exact count easily in status
+                    pendingUploads: status.uploading ? 1 : 0,
                     isConnected: status.connected,
                 });
                 this.deriveMode();
@@ -51,7 +59,7 @@ class SyncController {
         });
 
         // Initial sync trigger
-        this.sync();
+        this.sync().catch(e => console.error('[SyncController] Initial sync failed:', e));
     }
 
     private handleNetworkChange = (state: NetInfoState) => {
@@ -82,11 +90,20 @@ class SyncController {
     private updateState(updates: Partial<SyncState>) {
         if (updates.lastError) {
             const timestamp = new Date().toISOString();
-            this.errorLog.unshift(`[${timestamp}] ${updates.lastError}`);
+            this.errorLog.unshift(`[${timestamp}] ${updates.lastError} `);
             if (this.errorLog.length > 50) this.errorLog.pop();
         }
         this.state = { ...this.state, ...updates };
-        this.notify();
+        this.notifyThrottled();
+    }
+
+    private throttleTimer: NodeJS.Timeout | null = null;
+    private notifyThrottled() {
+        if (this.throttleTimer) return;
+        this.throttleTimer = setTimeout(() => {
+            this.notify();
+            this.throttleTimer = null;
+        }, 500); // Throttle UI updates to 2x per second during high activity
     }
 
     subscribe(listener: (state: SyncState) => void) {
@@ -102,15 +119,50 @@ class SyncController {
     }
 
     async sync() {
-        if (!this.state.isConnected) return;
+        if (!this.state.isConnected) {
+            console.log('[SyncController] Skipping sync: Offline');
+            return;
+        }
+        if (this.syncingPromise) {
+            console.log('[SyncController] Sync already in progress, waiting...');
+            return this.syncingPromise;
+        }
+
+        this.syncingPromise = (async () => {
+            try {
+                console.log('[SyncController] Starting sync process...');
+                await db.connect(connector);
+
+                // On web, we force a manual hydration sweep
+                if (typeof window !== 'undefined' && (db as any).hydrate) {
+                    console.log('[SyncController] Awaiting manual hydration sweep...');
+                    try {
+                        await (db as any).hydrate();
+                        console.log('[SyncController] Manual hydration sweep complete.');
+                        this.updateState({ isHydrated: true });
+                    } catch (hydrateError: any) {
+                        console.error('[SyncController] Hydration sweep error:', hydrateError);
+                        // Still mark as hydrated so UI can show whatever it has
+                        this.updateState({ lastError: `Hydration: ${hydrateError.message}`, isHydrated: true });
+                    }
+                } else {
+                    this.updateState({ isHydrated: true });
+                }
+            } catch (e: any) {
+                console.error('[SyncController] Sync process failed:', e);
+                this.updateState({ lastError: e.message, isHydrated: true });
+            }
+        })();
+
         try {
-            await db.connect(connector);
-        } catch (e: any) {
-            this.updateState({ lastError: e.message });
+            await this.syncingPromise;
+        } finally {
+            this.syncingPromise = null;
         }
     }
 
     reset() {
+        console.log('[SyncController] Resetting SyncController state and PowerSync connection.');
         if (this.dbUnsubscribe) this.dbUnsubscribe();
         db.disconnect();
         this.initialized = false;
@@ -119,7 +171,8 @@ class SyncController {
             pendingWrites: 0,
             pendingUploads: 0,
             lastSyncedAt: null,
-            lastError: null
+            lastError: null,
+            isHydrated: false
         });
         this.errorLog = [];
     }

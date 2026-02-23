@@ -36,18 +36,44 @@ export const usePlanting = () => {
         const abortController = new AbortController();
 
         // Watch seeds
-        watchFarmQuery(
+        const unsubSeeds = watchFarmQuery(
             'SELECT * FROM seed_varieties WHERE farm_id = ?',
             [farmId],
             {
-                onResult: (result: any) => setSeeds(result.rows?._array || []),
+                onResult: (result: any) => {
+                    const rows = result.rows?._array || [];
+                    setSeeds(prev => {
+                        if (JSON.stringify(prev) === JSON.stringify(rows)) return prev;
+                        return rows;
+                    });
+                },
                 onError: (e: any) => console.error('Failed to watch seeds', e)
             }
         );
 
-        // ... (rest of watch remains same)
-        return () => abortController.abort();
-    }, [farmId]);
+        // Watch logs
+        const unsubLogs = watchFarmQuery(
+            'SELECT * FROM planting_logs WHERE farm_id = ? ORDER BY planted_at DESC',
+            [farmId],
+            {
+                onResult: (result: any) => {
+                    const rows = result.rows?._array || [];
+                    setPlantingLogs(prev => {
+                        if (JSON.stringify(prev) === JSON.stringify(rows)) return prev;
+                        return rows;
+                    });
+                    setLoading(false);
+                },
+                onError: (e: any) => console.error('Failed to watch planting logs', e)
+            }
+        );
+
+        return () => {
+            abortController.abort();
+            unsubSeeds();
+            unsubLogs();
+        };
+    }, [farmId, watchFarmQuery]);
 
     const addPlantingLog = async (params: {
         fieldId: string;

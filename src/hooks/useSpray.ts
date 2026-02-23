@@ -16,7 +16,7 @@ export const useSpray = () => {
         const abortController = new AbortController();
 
         // Watch recipes with items joined
-        watchFarmQuery(
+        const unsubRecipes = watchFarmQuery(
             `SELECT r.*, 
                     ri.id as item_id, ri.product_name as item_product_name, 
                     ri.epa_number as item_epa_number, ri.rate as item_rate, ri.unit as item_unit
@@ -27,14 +27,18 @@ export const useSpray = () => {
             {
                 onResult: (result: any) => {
                     const rows = result.rows?._array || [];
-                    setRecipes(SprayUtility.transformRecipeRows(rows));
+                    const transformed = SprayUtility.transformRecipeRows(rows);
+                    setRecipes(prev => {
+                        if (JSON.stringify(prev) === JSON.stringify(transformed)) return prev;
+                        return transformed;
+                    });
                 },
                 onError: (e: any) => console.error('Failed to watch recipes', e)
             }
         );
 
         // Watch spray logs with items joined
-        watchFarmQuery(
+        const unsubLogs = watchFarmQuery(
             `SELECT sl.*, sli.id as item_id, sli.product_name as item_product_name, 
                     sli.epa_number as item_epa_number, sli.rate as item_rate, sli.rate_unit as item_unit,
                     sli.total_amount as item_total_amount, sli.total_unit as item_total_unit
@@ -46,14 +50,23 @@ export const useSpray = () => {
             {
                 onResult: (result: any) => {
                     const rows = result.rows?._array || [];
-                    setSprayLogs(SprayUtility.transformSprayLogRows(rows));
+                    const transformed = SprayUtility.transformSprayLogRows(rows);
+                    setSprayLogs(prev => {
+                        if (JSON.stringify(prev) === JSON.stringify(transformed)) return prev;
+                        return transformed;
+                    });
+                    setLoading(false);
                 },
                 onError: (e: any) => console.error('Failed to watch spray logs', e)
             }
         );
 
-        return () => abortController.abort();
-    }, [farmId]);
+        return () => {
+            abortController.abort();
+            unsubRecipes();
+            unsubLogs();
+        };
+    }, [farmId, watchFarmQuery]);
 
     const voidSprayLog = async (logId: string, reason: string) => {
         try {

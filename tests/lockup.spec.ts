@@ -28,32 +28,30 @@ async function mockData(page: Page) {
     }
 
     if (!found) {
-        const globals = await page.evaluate(() => Object.keys(globalThis).filter(k => k.includes('POWERSYNC') || k.includes('powersync')));
-        throw new Error(`PowerSync not found on globalThis after 25s. Found similar globals: ${globals.join(', ')}`);
+        throw new Error(`PowerSync not found on globalThis after 25s.`);
     }
 
     await page.evaluate(async () => {
         const db = (globalThis as any).powersync;
-        console.log('PowerSync found, injecting data...');
 
         // Add farm settings
         await db.execute(
             `INSERT OR REPLACE INTO settings (id, farm_name, state, units, onboarding_completed, farm_id, updated_at) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
             ['farm_config', 'Repro Farm', 'Iowa', 'US', 1, 'repro-farm-id', new Date().toISOString()]
         );
 
         // Add a field
         await db.execute(
             `INSERT OR REPLACE INTO fields (id, name, acreage, farm_id, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?)`,
             ['field-1', 'North Corn Field', 160, 'repro-farm-id', new Date().toISOString()]
         );
 
         // Add a spray recipe
         await db.execute(
             `INSERT OR REPLACE INTO recipes (id, name, farm_id, water_rate_per_acre, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?)`,
             ['recipe-1', 'Pre-Emerge Repro', 'repro-farm-id', 15, new Date().toISOString()]
         );
     });
@@ -68,36 +66,20 @@ test.describe('Spray Button Lockup Reproduction', () => {
     });
 
     test('should open spray log session without locking up', async ({ page }) => {
-        console.log('Navigating to LOG tab...');
-        // Log tab is usually default, but let's click it to be sure
-        const logTab = page.getByTestId('tab-LOG');
-        if (await logTab.isVisible()) {
-            await logTab.click();
-        }
+        console.log('Verifying Fields tab is active...');
+        const manageTab = page.getByTestId('tab-MANAGE');
+        await expect(manageTab).toBeVisible();
 
-        console.log('Clicking Spray button...');
-        const sprayBtn = page.getByTestId('log-action-spray');
+        // Ensure we are on the Fields tab
+        await manageTab.click();
+
+        console.log('Clicking Spray button on Field card...');
+        const sprayBtn = page.getByTestId('field-card-spray-field-1');
         await expect(sprayBtn).toBeVisible();
         await sprayBtn.click();
 
-        console.log('Selecting field...');
-        const fieldItem = page.getByTestId('field-item-field-1');
-        await expect(fieldItem).toBeVisible();
-        await fieldItem.click();
-
-        console.log('Clicking Start Spraying in action sheet...');
-        const startSprayingBtn = page.getByTestId('action-start-spraying');
-        await expect(startSprayingBtn).toBeVisible();
-        await startSprayingBtn.click();
-
         console.log('Verifying LogSessionScreen is visible...');
-        try {
-            await expect(page.getByText('SPRAY Log')).toBeVisible({ timeout: 15000 });
-            console.log('Success: No lockup detected.');
-        } catch (e) {
-            console.error('Lockup or error detected! Taking screenshot...');
-            await page.screenshot({ path: 'test-results/lockup-failure.png' });
-            throw e;
-        }
+        await expect(page.getByText('SPRAY Log')).toBeVisible({ timeout: 15000 });
+        console.log('Success: No lockup detected.');
     });
 });

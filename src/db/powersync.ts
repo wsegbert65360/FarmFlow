@@ -37,9 +37,6 @@ const isExpoGo = Constants.appOwnership === 'expo';
 
 // --- Global Helpers for Persistence ---
 
-/**
- * Consolidated binary conversion helpers to resolve duplicated logic
- */
 const ConversionUtils = {
     uint8ArrayToBase64: (data: Uint8Array): string => {
         let binary = '';
@@ -59,12 +56,8 @@ const ConversionUtils = {
     }
 };
 
-/**
- * Professional IndexedDB persistence for the Web backend.
- * Extends storage capacity far beyond localStorage limits.
- */
 class FarmFlowDatabase extends Dexie {
-    db_storage!: DexieTable<{ id: string; data: string }, string>;
+    db_storage!: DexieTable<{ id: string; data: Uint8Array | string }, string>;
 
     constructor() {
         super('FarmFlowStore');
@@ -82,10 +75,20 @@ const WebIndexedDBPersister = {
         try {
             const entry = await indexedDB.db_storage.get('main_db');
             if (!entry) return null;
-            return ConversionUtils.base64ToUint8Array(entry.data);
+
+            // Handle both binary and legacy base64
+            if (entry.data instanceof Uint8Array) {
+                return entry.data;
+            }
+
+            if (typeof entry.data === 'string') {
+                console.log('[PowerSync] Migrating legacy base64 record to binary...');
+                return ConversionUtils.base64ToUint8Array(entry.data);
+            }
+
+            return null;
         } catch (e) {
             console.warn('[PowerSync] Failed to load persisted DB from IndexedDB', e);
-            // Fallback to localStorage for legacy migration if needed
             const legacy = localStorage.getItem('farmflow_db');
             if (legacy) {
                 console.log('[PowerSync] Migrating from localStorage to IndexedDB...');
@@ -94,12 +97,11 @@ const WebIndexedDBPersister = {
             return null;
         }
     },
-    async writeFile(data: any) {
+    async writeFile(data: Uint8Array) {
         if (!isWeb) return;
         try {
-            const base64 = ConversionUtils.uint8ArrayToBase64(data);
-            await indexedDB.db_storage.put({ id: 'main_db', data: base64 });
-            // Clean up legacy storage once written to IndexedDB
+            // CRITICAL: Put the raw Uint8Array. IndexedDB handles this efficiently.
+            await indexedDB.db_storage.put({ id: 'main_db', data });
             localStorage.removeItem('farmflow_db');
         } catch (e) {
             console.error('[PowerSync] Failed to save DB to IndexedDB', e);
@@ -107,10 +109,6 @@ const WebIndexedDBPersister = {
     }
 };
 
-/**
- * Mobile-only persistence for SQL.js using expo-file-system.
- * Used when running in Expo Go without native modules.
- */
 const MobileFilePersister = {
     async readFile() {
         if (isWeb) return null;
@@ -119,6 +117,7 @@ const MobileFilePersister = {
             const info = await FileSystem.getInfoAsync(uri);
             if (!info.exists) return null;
 
+            // On mobile, Base64 is often safer for large file bridging in Expo
             const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
             return ConversionUtils.base64ToUint8Array(base64);
         } catch (e) {
@@ -139,35 +138,30 @@ const MobileFilePersister = {
     }
 };
 
-/**
- * Expo Go compatible implementation that avoids native modules and web workers.
- */
 class ExpoPowerSyncDatabase extends AbstractPowerSyncDatabase {
     async _initialize(): Promise<void> {
         try {
-            // Optimized indices for Phase 3 query patterns
-            await this.execute('CREATE INDEX IF NOT EXISTS idx_spray_logs_field_time ON spray_logs(field_id, start_time)');
-            await this.execute('CREATE INDEX IF NOT EXISTS idx_farms_owner ON farms(owner_id)');
-            await this.execute('CREATE INDEX IF NOT EXISTS idx_invites_token ON invites(token)');
-            await this.execute('CREATE INDEX IF NOT EXISTS idx_farm_members_user ON farm_members(user_id)');
-            await this.execute('CREATE INDEX IF NOT EXISTS idx_grain_logs_bin_time ON grain_logs(bin_id, start_time)');
-            await this.execute('CREATE INDEX IF NOT EXISTS idx_planting_logs_field_time ON planting_logs(field_id, planted_at)');
-            await this.execute('CREATE INDEX IF NOT EXISTS idx_attachments_owner ON attachments(owner_record_id)');
-            await this.execute('CREATE INDEX IF NOT EXISTS idx_rent_agreements_landlord ON rent_agreements(landlord_id, crop_year)');
-            await this.execute('CREATE INDEX IF NOT EXISTS idx_agreement_fields_field ON agreement_fields(field_id)');
-            console.log('[PowerSync] Indices initialized.');
+            const db = this.database;
+            // Ensure indices are present for critical queries
+            await db.execute('CREATE INDEX IF NOT EXISTS idx_spray_logs_field_time ON spray_logs(field_id, sprayed_at)');
+            await db.execute('CREATE INDEX IF NOT EXISTS idx_farms_owner ON farms(owner_id)');
+            await db.execute('CREATE INDEX IF NOT EXISTS idx_farm_members_user ON farm_members(user_id)');
+            await db.execute('CREATE INDEX IF NOT EXISTS idx_grain_logs_bin_time ON grain_logs(bin_id, occurred_at)');
+            await db.execute('CREATE INDEX IF NOT EXISTS idx_planting_logs_field_time ON planting_logs(field_id, planted_at)');
+            await db.execute('CREATE INDEX IF NOT EXISTS idx_attachments_owner ON attachments(owner_record_id)');
+            await db.execute('CREATE INDEX IF NOT EXISTS idx_invites_token ON invites(token)');
+            await db.execute('CREATE INDEX IF NOT EXISTS idx_rent_agreements_landlord ON rent_agreements(landlord_id, crop_year)');
+            await db.execute('CREATE INDEX IF NOT EXISTS idx_agreement_fields_field ON agreement_fields(field_id)');
         } catch (e) {
-            console.warn('[PowerSync] Index initialization skipped or failed (might be first run):', e);
+            console.warn('[PowerSync] Index initialization skipped or failed:', e);
         }
     }
 
     protected openDBAdapter(options: PowerSyncDatabaseOptionsWithSettings): DBAdapter {
-        console.log('[PowerSync] Opening SQL.js DB Adapter');
         const factory = new SQLJSOpenFactory({
             ...options.database,
             locateFile: (file: string) => {
                 if (file.endsWith('.wasm')) {
-                    // On web, we serve this at the root
                     return '/sql-wasm.wasm';
                 }
                 return file;
@@ -186,18 +180,151 @@ class ExpoPowerSyncDatabase extends AbstractPowerSyncDatabase {
         options: RequiredAdditionalConnectionOptions
     ): AbstractStreamingSyncImplementation {
         if (isWeb || !ReactNativeRemote || !ReactNativeStreamingSyncImplementation) {
-            console.log('[PowerSync] Using web-compatible mock sync implementation');
+            console.log('[PowerSync] Using web-compatible sync implementation with hydration');
+
+            let hydrationPromise: Promise<void> | null = null;
+            let hasHydrated = false;
+
+            const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
+
+            const chunkedInsert = async (table: string, columns: string[], data: any[]) => {
+                const chunkSize = 100;
+                for (let i = 0; i < data.length; i += chunkSize) {
+                    const chunk = data.slice(i, i + chunkSize);
+                    await this.writeTransaction(async (tx) => {
+                        for (const row of chunk) {
+                            const placeholders = columns.map(() => '?').join(', ');
+                            const values = columns.map(col => {
+                                const val = row[col];
+                                if (typeof val === 'boolean') return val ? 1 : 0;
+                                return val;
+                            });
+                            await tx.execute(
+                                `INSERT OR REPLACE INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`,
+                                values
+                            );
+                        }
+                    });
+                    // Yield to main thread after each chunk to keep UI responsive and allow GC
+                    await yieldToMain();
+                }
+            };
+
+            const performHydration = async () => {
+                if (hasHydrated) return;
+                if (hydrationPromise) {
+                    console.log('[PowerSync Hydrator] Hydration already in progress, waiting for existing promise...');
+                    return hydrationPromise;
+                }
+
+                hydrationPromise = (async () => {
+                    try {
+                        const user = await (connector as any).getUser();
+                        if (!user) {
+                            console.warn('[PowerSync Hydrator] No user found for hydration.');
+                            return;
+                        }
+
+                        console.log(`[PowerSync Hydrator] Starting chunked hydration for user: ${user.id}`);
+
+                        if (user.id === 'dev-guest-user') {
+                            console.log('[PowerSync Hydrator] Detected Developer Guest - Injecting Sample Farm...');
+                            await this.writeTransaction(async (tx) => {
+                                const sampleFarmId = 'sample-farm-123';
+                                await tx.execute(
+                                    'INSERT OR REPLACE INTO farms (id, name, owner_id, created_at) VALUES (?, ?, ?, ?)',
+                                    [sampleFarmId, 'Sample Organic Farm', user.id, new Date().toISOString()]
+                                );
+                                await tx.execute(
+                                    'INSERT OR REPLACE INTO farm_members (id, user_id, farm_id, role, created_at) VALUES (?, ?, ?, ?, ?)',
+                                    ['sample-member-1', user.id, sampleFarmId, 'OWNER', new Date().toISOString()]
+                                );
+                                await tx.execute(
+                                    'INSERT OR REPLACE INTO fields (id, name, acreage, farm_id, created_at) VALUES (?, ?, ?, ?, ?)',
+                                    ['field-north', 'North Pasture', 80, sampleFarmId, new Date().toISOString()]
+                                );
+                                await tx.execute(
+                                    'INSERT OR REPLACE INTO fields (id, name, acreage, farm_id, created_at) VALUES (?, ?, ?, ?, ?)',
+                                    ['field-south', 'South Valley', 120, sampleFarmId, new Date().toISOString()]
+                                );
+                                await tx.execute(
+                                    'INSERT OR REPLACE INTO settings (id, farm_name, state, units, onboarding_completed, farm_id, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                                    ['farm_config', 'Sample Organic Farm', 'Iowa', 'US', 1, sampleFarmId, new Date().toISOString()]
+                                );
+                            });
+                            console.log('[PowerSync Hydrator] Sample Farm Injected.');
+                            hasHydrated = true;
+                            return;
+                        }
+
+                        // SEQUENTIAL FETCHING
+                        // 1. Members
+                        const membersRes = await (connector as any).client.from('farm_members').select('*');
+                        if (membersRes.data?.length) {
+                            await chunkedInsert('farm_members', ['id', 'user_id', 'farm_id', 'role', 'created_at'], membersRes.data);
+                        }
+
+                        // 2. Farms
+                        const farmsRes = await (connector as any).client.from('farms').select('*');
+                        if (farmsRes.data?.length) {
+                            await chunkedInsert('farms', ['id', 'name', 'owner_id', 'created_at'], farmsRes.data);
+                        }
+
+                        // 3. Fields
+                        const fieldsRes = await (connector as any).client.from('fields').select('*');
+                        if (fieldsRes.data?.length) {
+                            await chunkedInsert('fields', ['id', 'name', 'acreage', 'farm_id', 'created_at'], fieldsRes.data);
+                        }
+
+                        // 4. Recipes
+                        const recipesRes = await (connector as any).client.from('recipes').select('*');
+                        if (recipesRes.data?.length) {
+                            await chunkedInsert('recipes', ['id', 'name', 'product_name', 'epa_number', 'rate_per_acre', 'water_rate_per_acre', 'farm_id', 'created_at'], recipesRes.data);
+                        }
+
+                        // 5. Settings
+                        const settingsRes = await (connector as any).client.from('settings').select('*');
+                        if (settingsRes.data?.length) {
+                            const settingsData = settingsRes.data;
+                            await this.writeTransaction(async (tx) => {
+                                for (const s of settingsData) {
+                                    await tx.execute(
+                                        'INSERT OR REPLACE INTO settings (id, farm_name, state, units, onboarding_completed, farm_id, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                                        [s.id, s.farm_name, s.state, s.units, s.onboarding_completed ? 1 : 0, s.farm_id, s.updated_at]
+                                    );
+                                    // Ensure standard config alias exists
+                                    await tx.execute(
+                                        'INSERT OR REPLACE INTO settings (id, farm_name, state, units, onboarding_completed, farm_id, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                                        ['farm_config', s.farm_name, s.state, s.units, s.onboarding_completed ? 1 : 0, s.farm_id, s.updated_at]
+                                    );
+                                }
+                            });
+                        }
+
+                        hasHydrated = true;
+                        console.log('[PowerSync Hydrator] Hydration complete.');
+                    } catch (e) {
+                        console.error('[PowerSync Hydrator] Hydration failed:', e);
+                        throw e;
+                    } finally {
+                        hydrationPromise = null;
+                    }
+                })();
+
+                return hydrationPromise;
+            };
+
+            (this as any).hydrate = performHydration;
+
             return {
                 connect: async () => {
-                    console.log('[PowerSync Mock] Connect called');
-                    // In a real web implementation, we would start an upload loop here.
+                    await performHydration();
                 },
                 disconnect: async () => { },
                 dispose: async () => { },
-                isConnected: () => false, // Default to false on web until real auth/sync is added
+                isConnected: () => true,
                 waitForReady: async () => { },
                 uploadCrud: async () => {
-                    console.log('[PowerSync Mock] Propagating changes to Supabase...');
                     await connector.uploadData(this);
                 }
             } as any;
@@ -228,12 +355,7 @@ if (isWeb || isExpoGo) {
             dbFilename: 'farmflow.db',
         },
     });
-
-    // On Web, SQL.js data is in-memory by default. 
-    // We can add a simple persistence hook here if needed, 
-    // but for now, we'll focus on getting it to render.
 } else {
-    // Native implementation
     dbInstance = new PowerSyncNative({
         schema: AppSchema,
         database: {
@@ -242,12 +364,10 @@ if (isWeb || isExpoGo) {
     });
 }
 
-// Expose for E2E testing
 if (typeof globalThis !== 'undefined') {
     (globalThis as any).powersync = dbInstance;
 }
 
 export const db = dbInstance;
 
-// Start synchronization
-db.connect(connector).catch((e: any) => console.error('PowerSync connect error:', e));
+// Initial connection handled by SyncController

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { syncController, SyncState } from './SyncController';
 
 export const useSyncController = () => {
@@ -8,8 +8,8 @@ export const useSyncController = () => {
         return syncController.subscribe(setState);
     }, []);
 
-    return {
+    return React.useMemo(() => ({
         ...state,
         sync: () => syncController.sync(),
-    };
+    }), [state]);
 };

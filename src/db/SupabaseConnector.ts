@@ -33,10 +33,11 @@ export class SupabaseConnector implements PowerSyncBackendConnector {
         const { data: { session }, error } = await this.client.auth.getSession();
 
         if (error || !session) {
-            console.warn('[SupabaseConnector] No active session found.');
+            console.warn('[SupabaseConnector] No active session found during fetchCredentials.', error);
             return null;
         }
 
+        console.log('[SupabaseConnector] Successfully fetched credentials for user:', session.user.email);
         return {
             endpoint: SUPABASE_URL,
             token: session.access_token,

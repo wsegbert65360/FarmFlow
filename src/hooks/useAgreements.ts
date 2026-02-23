@@ -41,15 +41,19 @@ export const useAgreements = (cropYear?: number) => {
 
         query += ' ORDER BY crop_year DESC, created_at DESC';
 
-        const cleanup = watchFarmQuery(query, params, {
+        const unsubscribe = watchFarmQuery(query, params, {
             onResult: (result: any) => {
-                setAgreements(result.rows?._array || []);
+                const rows = result.rows?._array || [];
+                setAgreements(prev => {
+                    if (JSON.stringify(prev) === JSON.stringify(rows)) return prev;
+                    return rows;
+                });
                 setLoading(false);
             }
         });
 
         return () => {
-            if (typeof cleanup === 'function') cleanup();
+            if (typeof unsubscribe === 'function') unsubscribe();
         };
     }, [farmId, cropYear, watchFarmQuery]);
 

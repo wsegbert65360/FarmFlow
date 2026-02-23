@@ -17,27 +17,33 @@ export const useFarms = () => {
     useEffect(() => {
         const abortController = new AbortController();
 
-        // Watch farm_members and join with farms
         // Note: In PowerSync, we sync both tables.
-        db.watch(
+        const unsubscribe = db.watch(
             `SELECT f.id, f.name, m.role 
              FROM farms f 
              JOIN farm_members m ON f.id = m.farm_id`,
             [],
             {
                 onResult: (result) => {
-                    setFarms(result.rows?._array || []);
+                    const rows = result.rows?._array || [];
+                    setFarms(prev => {
+                        if (JSON.stringify(prev) === JSON.stringify(rows)) return prev;
+                        return rows;
+                    });
                     setLoading(false);
                 },
                 onError: (error) => {
-                    console.error('Failed to watch farms', error);
+                    console.error('[useFarms] Watch error:', error);
                     setLoading(false);
                 }
             },
             { signal: abortController.signal }
         );
 
-        return () => abortController.abort();
+        return () => {
+            abortController.abort();
+            if (typeof unsubscribe === 'function') (unsubscribe as any)();
+        };
     }, []);
 
     const switchFarm = async (farmId: string, farmName: string) => {

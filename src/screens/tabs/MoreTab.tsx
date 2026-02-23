@@ -38,7 +38,7 @@ export const MoreTab = () => {
 
     return (
         <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-            <Text style={styles.title}>More</Text>
+            <Text style={styles.title} testID="more-title">More</Text>
 
             <TouchableOpacity style={styles.menuItem} onPress={() => setView('MANAGE')} testID="more-manage-btn">
                 <Text style={styles.menuIcon}>⚙️</Text>
@@ -54,6 +54,25 @@ export const MoreTab = () => {
                 <View style={styles.menuTextContainer}>
                     <Text style={styles.menuTitle}>Settings</Text>
                     <Text style={styles.menuSubtitle}>App Preferences, Account</Text>
+                </View>
+                <Text style={styles.chevron}>›</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+                style={[styles.menuItem, { marginTop: 40, backgroundColor: '#FFF5F5', borderColor: '#FFE0E0', borderWidth: 1 }]}
+                onPress={async () => {
+                    const { supabase } = require('../../supabase/client');
+                    await supabase.auth.signOut();
+                    // On web, reload to clear all state. On native, rely on AuthGate.
+                    const { Platform } = require('react-native');
+                    if (Platform.OS === 'web') window.location.reload();
+                }}
+                testID="more-signout-btn"
+            >
+                <Text style={styles.menuIcon}>🚪</Text>
+                <View style={styles.menuTextContainer}>
+                    <Text style={[styles.menuTitle, { color: Theme.colors.danger }]}>Sign Out</Text>
+                    <Text style={styles.menuSubtitle}>End current session</Text>
                 </View>
                 <Text style={styles.chevron}>›</Text>
             </TouchableOpacity>

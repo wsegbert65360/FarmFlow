@@ -33,12 +33,16 @@ export const useAttachments = (ownerRecordId?: string) => {
             params.push(ownerRecordId);
         }
 
-        watchFarmQuery(
+        const unsubscribe = watchFarmQuery(
             query,
             params,
             {
                 onResult: (result: any) => {
-                    setAttachments(result.rows?._array || []);
+                    const rows = result.rows?._array || [];
+                    setAttachments(prev => {
+                        if (JSON.stringify(prev) === JSON.stringify(rows)) return prev;
+                        return rows;
+                    });
                     setLoading(false);
                 },
                 onError: (error: any) => {
@@ -48,8 +52,11 @@ export const useAttachments = (ownerRecordId?: string) => {
             }
         );
 
-        return () => abortController.abort();
-    }, [ownerRecordId, farmId]);
+        return () => {
+            abortController.abort();
+            unsubscribe();
+        };
+    }, [ownerRecordId, farmId, watchFarmQuery]);
 
     const addAttachment = async (attachment: Partial<Attachment>) => {
         try {

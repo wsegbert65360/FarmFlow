@@ -27,27 +27,44 @@ export const useLandlords = () => {
         const abortController = new AbortController();
 
         // Watch Landlords
-        watchFarmQuery(
+        const unsubLandlords = watchFarmQuery(
             'SELECT * FROM landlords WHERE farm_id = ?',
             [farmId],
             {
-                onResult: (result: any) => setLandlords(result.rows?._array || []),
+                onResult: (result: any) => {
+                    const rows = result.rows?._array || [];
+                    setLandlords(prev => {
+                        if (JSON.stringify(prev) === JSON.stringify(rows)) return prev;
+                        return rows;
+                    });
+                },
                 onError: (error: any) => console.error('Failed to watch landlords', error)
             }
         );
 
         // Watch Field Splits
-        watchFarmQuery(
+        const unsubSplits = watchFarmQuery(
             'SELECT * FROM landlord_shares WHERE farm_id = ?',
             [farmId],
             {
-                onResult: (result: any) => setFieldSplits(result.rows?._array || []),
+                onResult: (result: any) => {
+                    const rows = result.rows?._array || [];
+                    setFieldSplits(prev => {
+                        if (JSON.stringify(prev) === JSON.stringify(rows)) return prev;
+                        return rows;
+                    });
+                    setLoading(false);
+                },
                 onError: (error: any) => console.error('Failed to watch field splits', error)
             }
         );
 
-        return () => abortController.abort();
-    }, [farmId]);
+        return () => {
+            abortController.abort();
+            unsubLandlords();
+            unsubSplits();
+        };
+    }, [farmId, watchFarmQuery]);
 
     // ... (addLandlord/addFieldSplit remain same)
 
