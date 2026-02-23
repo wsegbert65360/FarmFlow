@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Platform, useWindowDimensions, TouchableOpacity } from 'react-native';
 import { Theme } from '../constants/Theme';
 import { connector } from '../db/SupabaseConnector';
+import { generateDiagnosticReport } from '../utils/DiagnosticUtility';
+import { showAlert } from '../utils/AlertUtility';
 
 const getStatusConfig = (isConnected: boolean, isSyncing: boolean) => {
     if (isSyncing) return { label: 'SYNCING', color: Theme.colors.warning };
@@ -21,7 +23,22 @@ export const StatusOverlay = ({ isConnected, isSyncing = false, variant = 'float
         });
     }, []);
 
+    const handleLongPress = async () => {
+        try {
+            await generateDiagnosticReport();
+            showAlert('Diagnostics Exported', 'System audit report is ready to share.');
+        } catch (e) {
+            console.error('[StatusOverlay] Diagnostic trigger failed:', e);
+            showAlert('Export Failed', 'Could not generate diagnostic report.');
+        }
+    };
+
     const handleExport = async () => {
+        // This function is now redundant if handleLongPress is used for export.
+        // Keeping it as per instruction to only modify/add handleLongPress.
+        // If the intent was to replace handleExport with handleLongPress,
+        // then handleExport should be removed or its content changed.
+        // For now, assuming handleLongPress is a new action.
         const { generateDiagnosticReport } = require('../utils/DiagnosticUtility');
         const { showAlert } = require('../utils/AlertUtility');
         try {

@@ -21,7 +21,13 @@ interface EmptyStateProps {
 
 export const EmptyState = ({ title, message, icon, actionLabel, onAction }: EmptyStateProps) => (
     <View style={styles.centered}>
-        {icon && <Image source={icon} style={styles.emptyIcon} resizeMode="contain" />}
+        {icon && (
+            typeof icon === 'string' ? (
+                <Text style={{ fontSize: 48, marginBottom: Theme.spacing.lg }}>{icon}</Text>
+            ) : (
+                <Image source={icon} style={styles.emptyIcon} resizeMode="contain" />
+            )
+        )}
         <Text style={styles.emptyTitle}>{title}</Text>
         <Text style={styles.emptyMessage}>{message}</Text>
         {actionLabel && onAction && (

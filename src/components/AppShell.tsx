@@ -23,6 +23,25 @@ import { WeatherWidget } from './WeatherWidget';
 import { FloatingActionButton } from './common/FloatingActionButton';
 import { FieldListScreen } from '../screens/FieldListScreen';
 
+const MenuButton = ({ title, icon, onPress }: { title: string, icon: string, onPress: () => void }) => (
+    <TouchableOpacity
+        style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#f9fafb',
+            padding: 20,
+            borderRadius: 16,
+            marginBottom: 12,
+            borderWidth: 1,
+            borderColor: '#f3f4f6'
+        }}
+        onPress={onPress}
+    >
+        <Text style={{ fontSize: 24, marginRight: 16 }}>{icon}</Text>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#111827' }}>{title}</Text>
+    </TouchableOpacity>
+);
+
 export const AppShell = () => {
     const { settings } = useSettings();
 
@@ -85,16 +104,32 @@ export const AppShell = () => {
     };
 
     const renderContent = () => {
-        console.log('[AppShell] Rendering activeTab:', activeTab);
-        switch (activeTab) {
-            case 'MANAGE':
-                return <FieldListScreen />;
-            case 'DASHBOARD':
-                return <DashboardTab />;
-            case 'MORE':
-                return <MoreTab />;
-            default:
-                return <FieldListScreen />;
+        const timestamp = new Date().toISOString();
+        console.log(`[AppShell:${timestamp}] Rendering activeTab: ${activeTab}`);
+
+        try {
+            switch (activeTab) {
+                case 'MANAGE':
+                    console.log(`[AppShell:${timestamp}] Loading FieldListScreen...`);
+                    return <FieldListScreen />;
+                case 'DASHBOARD':
+                    console.log(`[AppShell:${timestamp}] Loading DashboardTab...`);
+                    return <DashboardTab />;
+                case 'MORE':
+                    console.log(`[AppShell:${timestamp}] Loading MoreTab...`);
+                    return <MoreTab />;
+                default:
+                    console.log(`[AppShell:${timestamp}] Loading fallback FieldListScreen...`);
+                    return <FieldListScreen />;
+            }
+        } catch (error) {
+            console.error(`[AppShell:${timestamp}] CRITICAL RENDER ERROR:`, error);
+            return (
+                <View style={{ padding: 40, alignItems: 'center' }}>
+                    <Text style={{ color: 'red', fontWeight: 'bold' }}>Render Error</Text>
+                    <Text>{String(error)}</Text>
+                </View>
+            );
         }
     };
 
@@ -183,8 +218,12 @@ export const AppShell = () => {
                 onSwitchFarm={handleSwitchFarm}
             />
 
-            <Modal visible={showActivityMenu} transparent animationType="slide">
-                <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+            {showActivityMenu && (
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', zIndex: 2000 }}>
+                    <TouchableOpacity
+                        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+                        onPress={() => setShowActivityMenu(false)}
+                    />
                     <View style={{ backgroundColor: 'white', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 32, paddingBottom: 48 }}>
                         <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 24 }}>New Activity</Text>
 
@@ -221,29 +260,11 @@ export const AppShell = () => {
                         </TouchableOpacity>
                     </View>
                 </View>
-            </Modal>
+            )}
         </SafeAreaView>
     );
 };
 
-const MenuButton = ({ title, icon, onPress }: { title: string, icon: string, onPress: () => void }) => (
-    <TouchableOpacity
-        style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: '#f9fafb',
-            padding: 20,
-            borderRadius: 16,
-            marginBottom: 12,
-            borderWidth: 1,
-            borderColor: '#f3f4f6'
-        }}
-        onPress={onPress}
-    >
-        <Text style={{ fontSize: 24, marginRight: 16 }}>{icon}</Text>
-        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#111827' }}>{title}</Text>
-    </TouchableOpacity>
-);
 
 const styles = StyleSheet.create({
     safeArea: { flex: 1, backgroundColor: Theme.colors.background },

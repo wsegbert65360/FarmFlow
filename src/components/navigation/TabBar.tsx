@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { LayoutDashboard, Wheat, Menu } from 'lucide-react-native';
 import { Theme } from '../../constants/Theme';
 
 export type TabType = 'MANAGE' | 'HISTORY' | 'DASHBOARD' | 'SETTINGS' | 'MORE';
@@ -14,10 +13,10 @@ export const TabBar: React.FC<TabBarProps> = ({ activeTab, setActiveTab }) => {
     // Current tabs based on redesign: Fields (MANAGE), Grain (DASHBOARD/New), More (MORE)
     // Note: Mapping DASHBOARD to "Grain" for now as per user request to simplify.
 
-    const tabs: { type: TabType; icon: any; label: string }[] = [
-        { type: 'MANAGE', icon: LayoutDashboard, label: 'Fields' },
-        { type: 'DASHBOARD', icon: Wheat, label: 'Grain' },
-        { type: 'MORE', icon: Menu, label: 'More' },
+    const tabs: { type: TabType; icon: string; label: string }[] = [
+        { type: 'MANAGE', icon: '🚜', label: 'Fields' },
+        { type: 'DASHBOARD', icon: '📊', label: 'Grain' },
+        { type: 'MORE', icon: '🔧', label: 'More' },
     ];
 
     return (
@@ -27,7 +26,7 @@ export const TabBar: React.FC<TabBarProps> = ({ activeTab, setActiveTab }) => {
         >
             {tabs.map((tab) => {
                 const isActive = activeTab === tab.type;
-                const Icon = tab.icon;
+                // Unused variable removed to harden production build
 
                 return (
                     <TouchableOpacity
@@ -40,11 +39,7 @@ export const TabBar: React.FC<TabBarProps> = ({ activeTab, setActiveTab }) => {
                         accessibilityState={{ selected: isActive }}
                         testID={`tab-${tab.type}`}
                     >
-                        <Icon
-                            size={24}
-                            color={isActive ? '#2563eb' : '#9ca3af'}
-                            strokeWidth={isActive ? 2.5 : 2}
-                        />
+                        <Text style={{ fontSize: 24, color: isActive ? '#2563eb' : '#9ca3af' }}>{tab.icon}</Text>
                         <Text
                             className={`text-[10px] font-bold mt-1 uppercase tracking-widest ${isActive ? 'text-blue-600' : 'text-gray-400'}`}
                             style={{ fontSize: 10, fontWeight: 'bold', marginTop: 4, color: isActive ? '#2562eb' : '#9ca3af' }}

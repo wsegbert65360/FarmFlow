@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import { Sun, Wind, Droplets } from 'lucide-react-native';
 
 export const WeatherWidget = () => {
     // Mock weather data for now - could be hooked up to an API later
@@ -25,7 +24,7 @@ export const WeatherWidget = () => {
                 style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
             >
                 <View className="flex-row items-center" style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Sun color="white" size={40} style={{ marginRight: 12 }} />
+                    <Text style={{ fontSize: 40, marginRight: 12 }}>☀️</Text>
                     <View>
                         <Text style={{ color: 'white', fontSize: 36, fontWeight: 'bold' }}>{weather.temp}°F</Text>
                         <Text style={{ color: '#dbeafe', fontSize: 14, fontWeight: '500' }}>
@@ -36,7 +35,7 @@ export const WeatherWidget = () => {
 
                 <View style={{ alignItems: 'flex-end' }}>
                     <View className="flex-row items-center mb-1" style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                        <Wind color="white" size={20} style={{ marginRight: 8 }} />
+                        <Text style={{ fontSize: 20, marginRight: 8 }}>💨</Text>
                         <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>{weather.windSpeed} mph</Text>
                     </View>
                     <Text style={{ color: '#dbeafe', fontSize: 12, textAlign: 'right', lineHeight: 16 }}>

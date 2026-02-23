@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { Leaf, Pipette, Tractor, CheckCircle2, Clock } from 'lucide-react-native';
 import { Field } from '../hooks/useFields';
 
 interface FieldCardProps {
@@ -31,8 +30,7 @@ export const FieldCard: React.FC<FieldCardProps> = ({ field, onAction }) => {
                         className="flex-row items-center bg-green-50 px-2.5 py-1 rounded-full border border-green-100"
                         style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0fdf4', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 9999, borderWidth: 1, borderColor: '#dcfce7' }}
                     >
-                        <CheckCircle2 color="#22c55e" size={12} style={{ marginRight: 4 }} />
-                        <Text style={{ color: '#15803d', fontSize: 10, fontWeight: 'bold' }}>SYNCED</Text>
+                        <Text style={{ color: '#15803d', fontSize: 10, fontWeight: 'bold' }}>✅ SYNCED</Text>
                     </View>
                 ) : (
                     <TouchableOpacity
@@ -41,8 +39,7 @@ export const FieldCard: React.FC<FieldCardProps> = ({ field, onAction }) => {
                         onPress={() => console.log('[Sync] Triggering manual sync from FieldCard...')}
                         testID={`field-sync-pill-${field.id}`}
                     >
-                        <Clock color="#f97316" size={12} style={{ marginRight: 4 }} />
-                        <Text style={{ color: '#c2410c', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1 }}>Pending</Text>
+                        <Text style={{ color: '#c2410c', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1 }}>⏳ Pending</Text>
                     </TouchableOpacity>
                 )}
             </View>
