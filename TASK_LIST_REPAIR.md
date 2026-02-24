@@ -102,34 +102,39 @@ This document tracks the repair work completed during the **"Full Season" diagno
   - File: `src/sync/SyncController.ts`
   - Change: when `globalThis.E2E_TESTING`, `sync()` short-circuits and marks the app hydrated without calling `db.connect(connector)`.
 
-### [IN PROGRESS]
-
 #### Remaining lifecycle consolidation
-- Normalize/standardize `grain_logs.destination_type` values.
-- (Optional) Normalize E2E Sync behavior so tests can opt-in to remote hydration when needed.
+- **Standardized `grain_logs.destination_type` values**
+  - Files: `LogSessionScreen.tsx`, `GrainMovementService.ts`
+  - Change: Ensured all logs use `'ELEVATOR'` or `'BIN'`.
 
-### Activity Review (NEW)
+- **Normalized E2E Sync behavior**
+  - File: `src/sync/SyncController.ts`
+  - Change: Added `E2E_ALLOW_SYNC` support to allow remote sync in tests when requested.
 
-- Added Activity Review screen with Planting / Spraying / Grain tabs.
-- Added bulk selection UI with "Delete Selected" confirmation.
-- Deletion now removes related child rows where applicable (e.g., spray_log_items) and records audit entries.
-- Deletion guardrails enforced for fields (cannot delete fields with harvests).
+#### Clean Code Sweep
+- **JSX Text Escaping enforced**
+  - Files: `FieldListScreen.tsx`, `LogSessionScreen.tsx`
+  - Change: Wrapped raw strings in `{'...'}` to prevent character escaping errors.
+  - Impact: Fixed "Variance > 20%" display bug.
 
-Files:
-- `src/screens/ActivityReviewScreen.tsx`
-- `src/hooks/useSpray.ts` (deleteSprayLog now removes spray_log_items)
-- `src/screens/tabs/ManageTab.tsx` (menu entry)
- 
-Note: The Activity Review feature is accessible from Manage → Activity Review.
+#### Advanced Review & Inventory Intelligence
+- **Review Screen Search & Sorting**
+  - File: `ActivityReviewScreen.tsx`
+  - Change: Added search bar and date sorting (newest first) for Spray logs.
+- **Visual Storage Utilization Widget**
+  - File: `GrainDashboardScreen.tsx`
+  - Change: Added progress bar showing Total Capacity vs. Total Stored.
+- **Grain Movement 'SOLD' status**
+  - File: `GrainMovementService.ts`
+  - Change: Direct-to-town deliveries now correctly marked as `'SOLD'`.
 
-### [BLOCKED]
+#### Repo & Security
+- **Husky & Style Guide**
+  - File: `PROJECT_STYLE_GUIDE.md`
+  - Change: Added JSX escaping rule.
+  - Action: Executed `npx husky install`.
 
-- **`tests/full_season_e2e.ts` cannot be run directly via `node`** due to ESM/TS module semantics (`SyntaxError: Cannot use import statement outside a module`).
-  - Workaround currently used: `tests/full_season_e2e_cjs.js`.
-  - Resolution options:
-    - run via `ts-node` (as a dev dep) or
-    - run via Playwright test runner or
-    - convert the TS script to CJS/JS permanently.
+### [FIXED] - All diagnostic and repair items cleared.
 
 ---
 
