@@ -35,12 +35,13 @@ interface LogSessionProps {
     fixedAcreage?: number;
     fixedType: 'FIELD' | 'BIN';
     replacesLogId?: string;
+    preferredCrop?: string;
     onClose: () => void;
 }
 
 type ListItem = Recipe | SeedVariety | Bin | Contract | Field;
 
-export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixedType, replacesLogId, onClose }: LogSessionProps) => {
+export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixedType, replacesLogId, preferredCrop, onClose }: LogSessionProps) => {
     const { recipes, sprayLogs, loading: sprayLoading, addSprayLog } = useSpray();
     const { seeds, plantingLogs, loading: plantingLoading, addPlantingLog, getLastPopulation } = usePlanting();
     const { bins, loading: grainLoading, addGrainLog } = useGrain();
@@ -60,6 +61,11 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
     const [notes, setNotes] = useState('');
     const [saving, setSaving] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
+
+    // Landlord Split
+    const [landlordSplit, setLandlordSplit] = useState('100');
+    const [selectedLandlordId, setSelectedLandlordId] = useState<string | null>(null);
+    const [cropType, setCropType] = useState(preferredCrop || 'Corn');
 
     // TIME Control
     const [sprayedAt, setSprayedAt] = useState(() => new Date());
@@ -323,6 +329,15 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                 });
             } else if (type === 'HARVEST_TO_TOWN') {
                 const fieldId = fixedType === 'FIELD' ? fixedId : null;
+                const m = parseNumericInput(moisture) || 0;
+                const split = parseNumericInput(landlordSplit) || 100;
+
+                let splitNote = '';
+                if (split < 100) {
+                    const landlordName = landlords.find(l => l.id === selectedLandlordId)?.name || 'Direct Sale';
+                    splitNote = ` [Split: ${split}% to ${landlordName}]`;
+                }
+
                 await addGrainLog({
                     type: 'HARVEST_TO_TOWN',
                     field_id: fieldId,
@@ -330,8 +345,9 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                     destination_type: 'ELEVATOR',
                     destination_name: 'Town Elevator',
                     bushels_net: parseNumericInput(bushels) || 0,
-                    moisture: parseNumericInput(moisture) || 15.0,
-                    notes: notes,
+                    moisture: m,
+                    notes: (notes + splitNote).trim(),
+                    crop_type: cropType,
                     end_time: new Date().toISOString()
                 });
             }
@@ -610,6 +626,41 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                                 />
                             </View>
                         </View>
+
+                        {type === 'HARVEST_TO_TOWN' && (
+                            <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: Theme.colors.border, paddingTop: 16 }}>
+                                <Text style={styles.sectionTitle}>LANDLORD SPLIT</Text>
+                                <View style={styles.rowBetween}>
+                                    <View style={{ flex: 1, marginRight: 16 }}>
+                                        <Text style={styles.inputLabelSmall}>Split % (e.g., 50)</Text>
+                                        <TextInput
+                                            style={styles.amountInput}
+                                            value={landlordSplit}
+                                            onChangeText={setLandlordSplit}
+                                            keyboardType="numeric"
+                                            placeholder="100"
+                                        />
+                                    </View>
+                                    <View style={{ flex: 2 }}>
+                                        <Text style={styles.inputLabelSmall}>Landlord</Text>
+                                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                            {landlords.map(l => (
+                                                <TouchableOpacity
+                                                    key={l.id}
+                                                    onPress={() => setSelectedLandlordId(l.id)}
+                                                    style={[
+                                                        styles.itemCardSmall,
+                                                        selectedLandlordId === l.id && styles.itemCardActiveSmall
+                                                    ]}
+                                                >
+                                                    <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{l.name}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                    </View>
+                                </View>
+                            </View>
+                        )}
                     </View>
                 )}
 
@@ -639,18 +690,35 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                     </View>
                 )}
 
-                {/* SAVE AND REUSE BUTTON */}
-                <View style={{ paddingHorizontal: Theme.spacing.md, marginTop: Theme.spacing.lg }}>
-                    <TouchableOpacity
-                        style={styles.saveReuseButton}
-                        onPress={() => handleLog(true)}
-                        disabled={saving}
-                        accessibilityLabel="Save and Add Another"
-                        accessibilityRole="button"
-                    >
-                        <Text style={styles.saveReuseText}>{saving ? 'Saving...' : 'SAVE & ADD ANOTHER ＋'}</Text>
-                    </TouchableOpacity>
-                </View>
+                {/* SAVE AND REUSE BUTTON - NOT FOR SPRAY */}
+                {type !== 'SPRAY' && (
+                    <View style={{ paddingHorizontal: Theme.spacing.md, marginTop: Theme.spacing.lg }}>
+                        <TouchableOpacity
+                            style={styles.saveReuseButton}
+                            onPress={() => handleLog(true)}
+                            disabled={saving}
+                            accessibilityLabel="Save and Add Another"
+                            accessibilityRole="button"
+                        >
+                            <Text style={styles.saveReuseText}>{saving ? 'Saving...' : 'SAVE & ADD ANOTHER ＋'}</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {/* HIGH VISIBILITY SAVE FOR SPRAY */}
+                {type === 'SPRAY' && (
+                    <View style={{ paddingHorizontal: Theme.spacing.md, marginTop: Theme.spacing.lg }}>
+                        <TouchableOpacity
+                            style={[styles.saveReuseButton, { backgroundColor: Theme.colors.primary }]}
+                            onPress={() => handleLog(false)}
+                            disabled={saving}
+                            accessibilityLabel="Save Log"
+                            accessibilityRole="button"
+                        >
+                            <Text style={[styles.saveReuseText, { color: '#fff' }]}>{saving ? 'Saving...' : 'SAVE LOG'}</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
 
             </ScrollView>
         </SafeAreaView>
@@ -837,5 +905,21 @@ const styles = StyleSheet.create({
         fontSize: 16,
         minHeight: 64,
         justifyContent: 'center'
+    },
+    itemCardSmall: {
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        backgroundColor: '#f5f5f5',
+        marginRight: 8,
+        minHeight: 44,
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: Theme.colors.border
+    },
+    itemCardActiveSmall: {
+        backgroundColor: '#E3F2FD',
+        borderColor: Theme.colors.primary,
+        borderWidth: 1.5
     }
 });

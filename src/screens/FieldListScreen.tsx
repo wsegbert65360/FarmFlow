@@ -15,7 +15,8 @@ import { useFields, Field } from '../hooks/useFields';
 import { parseNumericInput } from '../utils/NumberUtility';
 import { useDatabase } from '../hooks/useDatabase';
 import { FieldCard } from '../components/FieldCard';
-import { LogSessionScreen } from '../screens/LogSessionScreen';
+import { LogSessionScreen, LogType } from '../screens/LogSessionScreen';
+import { HarvestSubmenuModal } from '../components/HarvestSubmenuModal';
 
 export type FieldListMode = 'DEFAULT' | 'SELECT' | 'MANAGE';
 export type FieldActionType = 'PLANTING' | 'SPRAY' | 'HARVEST' | 'HARVEST_TO_TOWN';
@@ -38,7 +39,9 @@ export const FieldListScreen: React.FC<FieldListScreenProps> = ({ mode = 'DEFAUL
     const [isAddModalVisible, setIsAddModalVisible] = useState(false);
     const [isEditModalVisible, setIsEditModalVisible] = useState(false);
     const [isLogSessionVisible, setIsLogSessionVisible] = useState(false);
-    const [activeLogType, setActiveLogType] = useState<'SPRAY' | 'PLANTING' | 'HARVEST' | 'HARVEST_TO_TOWN'>('SPRAY');
+    const [isHarvestModalVisible, setIsHarvestModalVisible] = useState(false);
+    const [activeLogType, setActiveLogType] = useState<LogType>('SPRAY');
+    const [selectedCrop, setSelectedCrop] = useState<string>('Corn');
 
     const [newName, setNewName] = useState('');
     const [newAcreage, setNewAcreage] = useState('');
@@ -87,7 +90,19 @@ export const FieldListScreen: React.FC<FieldListScreenProps> = ({ mode = 'DEFAUL
         }
 
         setSelectedField(field);
-        setActiveLogType(type);
+
+        if (type === 'HARVEST') {
+            setIsHarvestModalVisible(true);
+        } else {
+            setActiveLogType(type as LogType);
+            setIsLogSessionVisible(true);
+        }
+    };
+
+    const handleHarvestContinue = (crop: string, dest: 'BIN' | 'TOWN') => {
+        setSelectedCrop(crop);
+        setActiveLogType(dest === 'BIN' ? 'HARVEST' : 'HARVEST_TO_TOWN');
+        setIsHarvestModalVisible(false);
         setIsLogSessionVisible(true);
     };
 
@@ -191,6 +206,7 @@ export const FieldListScreen: React.FC<FieldListScreenProps> = ({ mode = 'DEFAUL
                             fixedId={selectedField.id}
                             fixedName={selectedField.name}
                             fixedType="FIELD"
+                            preferredCrop={selectedCrop}
                             onClose={() => {
                                 setIsLogSessionVisible(false);
                                 setSelectedField(null);
@@ -199,6 +215,13 @@ export const FieldListScreen: React.FC<FieldListScreenProps> = ({ mode = 'DEFAUL
                     )}
                 </Modal>
             )}
+
+            <HarvestSubmenuModal
+                visible={isHarvestModalVisible}
+                fieldName={selectedField?.name || ''}
+                onClose={() => setIsHarvestModalVisible(false)}
+                onContinue={handleHarvestContinue}
+            />
         </SafeAreaView>
     );
 };

@@ -25,3 +25,15 @@ To persist this change for the user:
 - **Sync Feedback:** All "Pending" states should be interactive, allowing users to manually trigger a sync retry.
 - **JSX Escaping:** UI strings containing special characters or variable-adjacent text must be wrapped in curly braces (e.g., `{'Text'}`) to prevent character escaping errors and ensure consistent rendering across platforms.
 - **Deletion Guardrails:** Critical entities (e.g., Fields) must have logic prevent deletion if dependent transactional records (e.g., Harvests) exist.
+28: 
+29: ## Deployment Checklist
+30: To maintain a functional CI/CD pipeline, the following GitHub Secrets must stay updated:
+31: 1. `VERCEL_TOKEN`: A valid Vercel Personal Access Token.
+32: 2. `VERCEL_ORG_ID`: Found in `.vercel/project.json` as `orgId`.
+33: 3. `VERCEL_PROJECT_ID`: Found in `.vercel/project.json` as `projectId`.
+34: 
+35: Before pushing changes that affect the build process, verify locally with:
+36: ```bash
+37: npx vercel link --yes
+38: npx vercel pull --yes --environment=production
+39: ```

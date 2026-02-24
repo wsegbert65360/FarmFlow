@@ -100,15 +100,6 @@ export const FieldCard: React.FC<FieldCardProps> = ({ field, onAction }) => {
                     >
                         <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>HARVEST</Text>
                     </TouchableOpacity>
-
-                    <TouchableOpacity
-                        className="flex-1 bg-purple-700 py-4 rounded-xl items-center shadow-sm active:bg-purple-800"
-                        style={{ flex: 1, backgroundColor: '#7e22ce', paddingVertical: 16, alignItems: 'center', minHeight: 64, justifyContent: 'center' }}
-                        onPress={() => onAction('HARVEST_TO_TOWN')}
-                        testID={`field-card-harvest-to-town-${field.id}`}
-                    >
-                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>TO TOWN</Text>
-                    </TouchableOpacity>
                 </View>
             </View>
         </View>

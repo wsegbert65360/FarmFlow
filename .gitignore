@@ -45,3 +45,5 @@ playwright-report/
 test-results/
 login-onboarding-failure.png
 retry-failure.png
+
+.vercel
