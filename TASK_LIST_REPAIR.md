@@ -111,16 +111,16 @@ This document tracks the repair work completed during the **"Full Season" diagno
   - File: `src/sync/SyncController.ts`
   - Change: Added `E2E_ALLOW_SYNC` support to allow remote sync in tests when requested.
 
-#### Clean Code Sweep
-- **JSX Text Escaping enforced**
-  - Files: `FieldListScreen.tsx`, `LogSessionScreen.tsx`
-  - Change: Wrapped raw strings in `{'...'}` to prevent character escaping errors.
-  - Impact: Fixed "Variance > 20%" display bug.
-
 #### Advanced Review & Inventory Intelligence
 - **Review Screen Search & Sorting**
   - File: `ActivityReviewScreen.tsx`
   - Change: Added search bar and date sorting (newest first) for Spray logs.
+  - Tab 1 (Planting): Sorted alphabetically by Field Name (joined from `fields` table).
+  - Tab 2 (Spraying): Includes wind and temperature data.
+  - Tab 3 (Grain): Displays current bin totals using inventory logic.
+- **Bulk Selection & Deletion**
+  - Selection: Row-level checkboxes with state synchronization.
+  - Action: "Delete Selected" button with bulk confirmation popup.
 - **Visual Storage Utilization Widget**
   - File: `GrainDashboardScreen.tsx`
   - Change: Added progress bar showing Total Capacity vs. Total Stored.
@@ -131,8 +131,11 @@ This document tracks the repair work completed during the **"Full Season" diagno
 #### Repo & Security
 - **Husky & Style Guide**
   - File: `PROJECT_STYLE_GUIDE.md`
-  - Change: Added JSX escaping rule.
+  - Change: Added JSX escaping rule and Deletion Guardrail rule.
   - Action: Executed `npx husky install`.
+- **Deletion Guardrail**
+  - File: `src/hooks/useFields.ts`
+  - Behavior: Prevents field deletion if harvest records exist.
 
 ### [FIXED] - All diagnostic and repair items cleared.
 

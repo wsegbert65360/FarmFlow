@@ -26,6 +26,7 @@ export const ActivityReviewScreen = () => {
             // Check common fields
             const fieldsToSearch = [
                 log.field_id,
+                log.field_name,
                 log.recipe_id,
                 log.seed_id,
                 log.name,
@@ -38,13 +39,19 @@ export const ActivityReviewScreen = () => {
         });
     };
 
+    const sortedPlantingLogs = useMemo(() => {
+        return [...plantingLogs].sort((a, b) =>
+            (a.field_name || '').localeCompare(b.field_name || '')
+        );
+    }, [plantingLogs]);
+
     const sortedSprayLogs = useMemo(() => {
         return [...sprayLogs].sort((a, b) =>
-            new Date(b.sprayed_at || b.created_at).getTime() - new Date(a.sprayed_at || a.created_at).getTime()
+            new Date(b.sprayed_at || (b as any).created_at || b.id).getTime() - new Date(a.sprayed_at || (a as any).created_at || a.id).getTime()
         );
     }, [sprayLogs]);
 
-    const filteredPlantingLogs = filterLogs(plantingLogs);
+    const filteredPlantingLogs = filterLogs(sortedPlantingLogs);
     const filteredSprayLogs = filterLogs(sortedSprayLogs);
     const filteredBins = filterLogs(bins);
 
@@ -115,7 +122,7 @@ export const ActivityReviewScreen = () => {
                         <TouchableOpacity onPress={() => toggle(item.id)} style={styles.row} accessibilityRole="checkbox" accessibilityState={{ checked: !!selected[item.id] }}>
                             <Text style={styles.checkbox}>{selected[item.id] ? '☑' : '☐'}</Text>
                             <View>
-                                <Text style={styles.rowTitle}>{item.field_id} — {item.population} pop</Text>
+                                <Text style={styles.rowTitle}>{item.field_name || item.field_id} — {item.population} pop</Text>
                                 <Text style={styles.rowSub}>{item.planted_at}</Text>
                             </View>
                         </TouchableOpacity>

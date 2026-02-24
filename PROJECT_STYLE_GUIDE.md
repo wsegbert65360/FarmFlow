@@ -24,3 +24,4 @@ To persist this change for the user:
 - **Hit Targets:** All interactive elements must maintain a minimum 44x44px hit target for accessibility.
 - **Sync Feedback:** All "Pending" states should be interactive, allowing users to manually trigger a sync retry.
 - **JSX Escaping:** UI strings containing special characters or variable-adjacent text must be wrapped in curly braces (e.g., `{'Text'}`) to prevent character escaping errors and ensure consistent rendering across platforms.
+- **Deletion Guardrails:** Critical entities (e.g., Fields) must have logic prevent deletion if dependent transactional records (e.g., Harvests) exist.

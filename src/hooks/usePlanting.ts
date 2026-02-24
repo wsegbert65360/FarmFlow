@@ -53,7 +53,11 @@ export const usePlanting = () => {
 
         // Watch logs
         const unsubLogs = watchFarmQuery(
-            'SELECT * FROM planting_logs WHERE farm_id = ? ORDER BY planted_at DESC',
+            `SELECT pl.*, f.name as field_name 
+             FROM planting_logs pl 
+             LEFT JOIN fields f ON pl.field_id = f.id
+             WHERE pl.farm_id = ? 
+             ORDER BY pl.planted_at DESC`,
             [farmId],
             {
                 onResult: (result: any) => {
