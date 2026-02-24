@@ -508,7 +508,7 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                                 accessibilityRole="button"
                                 accessibilityLabel="Done editing time"
                             >
-                                <Text style={{ color: Theme.colors.primary, fontWeight: 'bold' }}>DONE</Text>
+                                <Text style={{ color: Theme.colors.primary, fontWeight: 'bold' }}>{'DONE'}</Text>
                             </TouchableOpacity>
                         </View>
                     ))}
@@ -534,7 +534,7 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                             </View>
                         )}
                     </View>
-                    {acreageWarning && <Text style={[styles.warningText, { textAlign: 'right', marginBottom: 5 }]}>⚠️ Variance {" > "} 20%</Text>}
+                    {acreageWarning && <Text style={[styles.warningText, { textAlign: 'right', marginBottom: 5 }]}>{'⚠️ Variance > 20%'}</Text>}
 
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
                         {items.map((item) => {
@@ -585,10 +585,10 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                 {/* 2.5 GRAIN INPUTS (Harvest/Delivery/Adjustment) */}
                 {(type === 'HARVEST' || type === 'DELIVERY' || type === 'ADJUSTMENT' || type === 'HARVEST_TO_TOWN') && (
                     <View style={styles.section}>
-                        <Text style={styles.sectionTitle} accessibilityRole="header">AMOUNTS</Text>
+                        <Text style={styles.sectionTitle} accessibilityRole="header">{'AMOUNTS'}</Text>
                         <View style={styles.amountRow}>
                             <View style={styles.amountGroup}>
-                                <Text style={styles.inputLabelSmall}>Bushels</Text>
+                                <Text style={styles.inputLabelSmall}>{'Bushels'}</Text>
                                 <TextInput
                                     style={styles.amountInput}
                                     placeholder="Bushels"

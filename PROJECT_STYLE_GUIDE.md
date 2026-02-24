@@ -23,3 +23,4 @@ To persist this change for the user:
 - **Global FAB (+):** Must open a selection menu for activities not tied to a specific field.
 - **Hit Targets:** All interactive elements must maintain a minimum 44x44px hit target for accessibility.
 - **Sync Feedback:** All "Pending" states should be interactive, allowing users to manually trigger a sync retry.
+- **JSX Escaping:** UI strings containing special characters or variable-adjacent text must be wrapped in curly braces (e.g., `{'Text'}`) to prevent character escaping errors and ensure consistent rendering across platforms.

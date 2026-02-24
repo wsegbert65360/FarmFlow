@@ -376,6 +376,18 @@ export const GrainDashboardScreen = ({ onSelectAction, mode = 'MANAGE' }: GrainD
                     </View>
                 </View>
 
+                {/* Quick Glance Widget */}
+                <View style={styles.quickGlanceContainer}>
+                    <View style={styles.rowBetween}>
+                        <Text style={styles.quickGlanceTitle}>Total Storage Utilization</Text>
+                        <Text style={styles.quickGlanceValue}>{stats.storagePercent.toFixed(1)}%</Text>
+                    </View>
+                    <View style={styles.quickGlanceTrack}>
+                        <View style={[styles.quickGlanceBar, { width: `${Math.min(stats.storagePercent, 100)}%` }]} />
+                    </View>
+                    <Text style={styles.quickGlanceSub}>{stats.totalLevel.toLocaleString()} / {stats.totalCapacity.toLocaleString()} bushels</Text>
+                </View>
+
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Virtual Bins</Text>
                     <TouchableOpacity onPress={() => openBinModal()} style={styles.addButton}>
@@ -499,6 +511,7 @@ export const GrainDashboardScreen = ({ onSelectAction, mode = 'MANAGE' }: GrainD
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Theme.colors.background },
     scrollContent: { padding: Theme.spacing.lg },
+    rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Theme.spacing.lg, marginBottom: Theme.spacing.md },
     sectionTitle: { ...Theme.typography.h2, color: Theme.colors.textSecondary },
     addButton: { backgroundColor: Theme.colors.primary, width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
@@ -603,6 +616,33 @@ const styles = StyleSheet.create({
         borderLeftColor: '#F59E0B',
     },
     alertText: { ...Theme.typography.caption, fontWeight: 'bold', color: '#1F2937' },
+    quickGlanceContainer: {
+        backgroundColor: Theme.colors.white,
+        padding: Theme.spacing.lg,
+        borderRadius: Theme.borderRadius.md,
+        marginBottom: Theme.spacing.lg,
+        borderWidth: 1,
+        borderColor: Theme.colors.border,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    quickGlanceTitle: { fontSize: 14, fontWeight: 'bold', color: Theme.colors.textSecondary },
+    quickGlanceValue: { fontSize: 16, fontWeight: 'bold', color: Theme.colors.primary },
+    quickGlanceTrack: {
+        height: 16,
+        backgroundColor: Theme.colors.surface,
+        borderRadius: 8,
+        marginVertical: Theme.spacing.sm,
+        overflow: 'hidden',
+    },
+    quickGlanceBar: {
+        height: '100%',
+        backgroundColor: Theme.colors.primary,
+    },
+    quickGlanceSub: { ...Theme.typography.caption, color: Theme.colors.textSecondary },
     statusBadge: {
         backgroundColor: Theme.colors.surface,
         paddingHorizontal: 8,

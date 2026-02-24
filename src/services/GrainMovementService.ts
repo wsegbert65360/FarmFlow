@@ -94,7 +94,7 @@ export class GrainMovementService {
                     moisture: params.moisture,
                     occurred_at: now,
                     source_grain_log_id: grainLogId,
-                    status: params.type === 'HARVEST_TO_TOWN' ? 'IN_TRANSIT' : 'STATIONARY',
+                    status: params.type === 'HARVEST_TO_TOWN' ? 'SOLD' : 'STATIONARY',
                     movement_token: movementToken
                 }, params.farmId);
 

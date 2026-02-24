@@ -94,8 +94,7 @@ export const FieldListScreen: React.FC<FieldListScreenProps> = ({ mode = 'DEFAUL
     if (loading) {
         return (
             <View className="flex-1 justify-center items-center bg-gray-50/50">
-                <ActivityIndicator size="large" color={Theme.colors.primary} />
-                <Text className="mt-4 text-gray-400 font-medium">Loading fields...</Text>
+                <Text className="mt-4 text-gray-400 font-medium">{'Loading fields...'}</Text>
             </View>
         );
     }
@@ -117,7 +116,7 @@ export const FieldListScreen: React.FC<FieldListScreenProps> = ({ mode = 'DEFAUL
                             testID={`select-field-${item.id}`}
                         >
                             <Text className="text-lg font-bold text-gray-900">{item.name}</Text>
-                            <Text className="text-gray-500 mt-1">{item.acreage} acres</Text>
+                            <Text className="text-gray-500 mt-1">{item.acreage}{' acres'}</Text>
                         </TouchableOpacity>
                     ) : (
                         <FieldCard
@@ -128,7 +127,7 @@ export const FieldListScreen: React.FC<FieldListScreenProps> = ({ mode = 'DEFAUL
                 )}
                 ListEmptyComponent={
                     <View className="items-center justify-center py-20 px-10">
-                        <Text className="text-gray-400 font-medium text-center">No fields found. Add your first field to start tracking activities.</Text>
+                        <Text className="text-gray-400 font-medium text-center">{'No fields found. Add your first field to start tracking activities.'}</Text>
                         {mode !== 'SELECT' && (
                             <TouchableOpacity
                                 className="mt-6 bg-blue-600 px-8 py-4 rounded-2xl shadow-md"
@@ -136,7 +135,7 @@ export const FieldListScreen: React.FC<FieldListScreenProps> = ({ mode = 'DEFAUL
                                 testID="add-field-btn"
                                 style={{ minHeight: 64, justifyContent: 'center' }}
                             >
-                                <Text className="text-white font-bold text-lg">+ Add Field</Text>
+                                <Text className="text-white font-bold text-lg">{'+ Add Field'}</Text>
                             </TouchableOpacity>
                         )}
                     </View>
@@ -148,7 +147,7 @@ export const FieldListScreen: React.FC<FieldListScreenProps> = ({ mode = 'DEFAUL
                 <Modal visible={isAddModalVisible} transparent animationType="slide">
                     <View className="flex-1 justify-end bg-black/50">
                         <View className="bg-white rounded-t-[40px] p-8 pb-12 shadow-2xl">
-                            <Text className="text-2xl font-bold text-gray-900 mb-6">New Field</Text>
+                            <Text className="text-2xl font-bold text-gray-900 mb-6">{'New Field'}</Text>
                             <TextInput
                                 className="bg-gray-50 border border-gray-100 p-4 rounded-2xl text-lg mb-4"
                                 placeholder="Field Name"
@@ -170,14 +169,14 @@ export const FieldListScreen: React.FC<FieldListScreenProps> = ({ mode = 'DEFAUL
                                 testID="add-field-save-btn"
                                 style={{ minHeight: 64, justifyContent: 'center' }}
                             >
-                                <Text className="text-white font-bold text-lg">Save Field</Text>
+                                <Text className="text-white font-bold text-lg">{'Save Field'}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => setIsAddModalVisible(false)}
                                 testID="add-field-cancel-btn"
                                 style={{ minHeight: 64, justifyContent: 'center' }}
                             >
-                                <Text className="text-center text-red-500 font-bold p-2">Cancel</Text>
+                                <Text className="text-center text-red-500 font-bold p-2">{'Cancel'}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
