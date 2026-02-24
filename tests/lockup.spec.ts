@@ -59,7 +59,14 @@ async function mockData(page: Page) {
 
 test.describe('Spray Button Lockup Reproduction', () => {
     test.beforeEach(async ({ page }) => {
-        page.on('console', msg => console.log(`BROWSER [${msg.type()}]: ${msg.text()}`));
+        page.on('console', msg => {
+            const text = msg.text();
+            // Known benign noise during web E2E (asset loads / blocked external resources)
+            if (msg.type() === 'error' && (text.includes('Failed to load resource') || text.includes('403'))) {
+                return;
+            }
+            console.log(`BROWSER [${msg.type()}]: ${text}`);
+        });
         await mockLogin(page);
         await page.goto('/');
         await mockData(page);

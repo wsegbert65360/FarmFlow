@@ -10,10 +10,17 @@ export interface AuditRecord {
     changedBy?: string;
 }
 
-export const recordAudit = async (audit: AuditRecord) => {
+/**
+ * Writes an audit row.
+ *
+ * If called from inside a PowerSync writeTransaction, pass the transaction `tx`
+ * so audit entries participate in the same atomic commit/rollback.
+ */
+export const recordAudit = async (audit: AuditRecord, dbInstanceOverride?: any) => {
     try {
         const id = uuidv4();
-        await db.execute(
+        const execDb = dbInstanceOverride || db;
+        await execDb.execute(
             'INSERT INTO audit_logs (id, action, table_name, record_id, farm_id, changed_by, changes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 id,
@@ -74,7 +81,7 @@ export const insertFarmRow = async (
             farmId: farmId,
             changedBy: userId,
             changes: data
-        });
+        }, dbInstance);
     }
 
     return id;
@@ -125,7 +132,7 @@ export const bulkInsertFarmRows = async (
                     farmId: farmId,
                     changedBy: userId,
                     changes: data
-                });
+                }, tx);
             }
             results.push(id);
         }
@@ -165,7 +172,7 @@ export const updateFarmRow = async (
         farmId: farmId,
         changedBy: userId,
         changes: data
-    });
+    }, dbInstance);
 };
 
 /**
@@ -194,7 +201,7 @@ export const deleteFarmRow = async (
         farmId: farmId,
         changedBy: userId,
         changes: { id }
-    });
+    }, dbInstance);
 };
 
 /**
@@ -205,7 +212,8 @@ export const watchFarmQuery = (
     sql: string,
     params: any[],
     farmId: string,
-    options: any
+    handlers: any,
+    watchOptions?: any
 ) => {
     if (!farmId) throw new Error('[DatabaseUtility] farmId is required for watching results');
 
@@ -218,7 +226,24 @@ export const watchFarmQuery = (
         throw new Error(`[DatabaseUtility] watchFarmQuery params must include active farm_id.`);
     }
 
-    return dbInstance.watch(sql, params, options);
+    const subscription = dbInstance.watch(sql, params, handlers, watchOptions);
+
+    // PowerSync watch() return type can differ across platforms/versions.
+    // Normalize to an unsubscribe function so call-sites can safely invoke it.
+    if (typeof subscription === 'function') {
+        return subscription;
+    }
+    if (subscription && typeof subscription.unsubscribe === 'function') {
+        return () => subscription.unsubscribe();
+    }
+    if (subscription && typeof subscription.dispose === 'function') {
+        return () => subscription.dispose();
+    }
+    if (subscription && typeof subscription.cancel === 'function') {
+        return () => subscription.cancel();
+    }
+
+    return () => { };
 };
 
 export const executeIdempotent = async (

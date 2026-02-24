@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../db/powersync';
 import { v4 as uuidv4 } from 'uuid';
 import { useDatabase } from './useDatabase';
+import { GrainMovementService } from '../services/GrainMovementService';
 
 export interface Bin {
     id: string;
@@ -109,6 +110,28 @@ export const useGrain = () => {
             const now = new Date().toISOString();
             const cropYear = new Date(log.end_time || now).getFullYear();
 
+            // Prefer the atomic service for harvest flows so grain_logs + grain_lots + lot_movements
+            // commit together.
+            if ((log.type === 'HARVEST' || log.type === 'HARVEST_TO_TOWN') && log.field_id) {
+                if (!farmId) throw new Error('[useGrain] Cannot record harvest without active farm context.');
+
+                const bin = log.bin_id ? bins.find(b => b.id === log.bin_id) : null;
+                const cropType = log.crop_type || bin?.crop_type || 'Unknown';
+
+                return await GrainMovementService.recordHarvest({
+                    type: log.type,
+                    fieldId: log.field_id,
+                    binId: log.bin_id || undefined,
+                    bushels: log.bushels_net,
+                    moisture: log.moisture,
+                    destinationName: log.destination_name || undefined,
+                    cropType,
+                    cropYear,
+                    farmId,
+                    notes: log.notes || undefined,
+                });
+            }
+
             // 1. Create the legacy grain_log
             const id = await insertFarmRow('grain_logs', {
                 type: log.type,
@@ -123,27 +146,6 @@ export const useGrain = () => {
                 start_time: now,
                 end_time: log.end_time || now
             });
-
-            // 2. Phase 2: Create Lot and Movement for HARVEST and HARVEST_TO_TOWN
-            if ((log.type === 'HARVEST' || log.type === 'HARVEST_TO_TOWN') && log.field_id) {
-                const bin = log.bin_id ? bins.find(b => b.id === log.bin_id) : null;
-                const cropType = log.crop_type || bin?.crop_type || 'Unknown';
-                const lotId = await getOrCreateLot(cropType, cropYear, log.field_id);
-                const movementToken = log.type === 'HARVEST_TO_TOWN' ? uuidv4().substring(0, 8).toUpperCase() : null;
-
-                await insertFarmRow('lot_movements', {
-                    lot_id: lotId,
-                    movement_type: log.type === 'HARVEST_TO_TOWN' ? 'DIRECT_TO_TOWN' : 'INTO_BIN',
-                    bin_id: log.bin_id || null,
-                    destination_name: log.type === 'HARVEST_TO_TOWN' ? (log.destination_name || 'Town Elevator') : null,
-                    bushels_net: log.bushels_net,
-                    moisture: log.moisture,
-                    occurred_at: log.end_time || now,
-                    source_grain_log_id: id,
-                    status: log.type === 'HARVEST_TO_TOWN' ? 'IN_TRANSIT' : 'STATIONARY',
-                    movement_token: movementToken
-                });
-            }
 
             // 3. Phase 2: FIFO Allocation for DELIVERY from Bin
             if (log.type === 'DELIVERY' && log.bin_id) {

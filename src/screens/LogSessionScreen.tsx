@@ -12,7 +12,19 @@ import { fetchCurrentWeather, WeatherData } from '../utils/WeatherUtility';
 import { useLandlords } from '../hooks/useLandlords';
 import { useSettings } from '../hooks/useSettings';
 import { parseNumericInput } from '../utils/NumberUtility';
-import DateTimePicker from '@react-native-community/datetimepicker';
+
+// Web-safe DateTimePicker import
+let DateTimePicker: React.ComponentType<any> | null = null;
+if (Platform.OS !== 'web') {
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const module = require('@react-native-community/datetimepicker');
+        DateTimePicker = module?.default || module || null;
+    } catch (error) {
+        console.warn('[LogSessionScreen] DateTimePicker import failed:', error);
+        DateTimePicker = null;
+    }
+}
 
 export type LogType = 'SPRAY' | 'PLANTING' | 'HARVEST' | 'DELIVERY' | 'ADJUSTMENT' | 'HARVEST_TO_TOWN';
 
@@ -50,8 +62,9 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
     const [showSuccess, setShowSuccess] = useState(false);
 
     // TIME Control
-    const [sprayedAt, setSprayedAt] = useState(new Date());
+    const [sprayedAt, setSprayedAt] = useState(() => new Date());
     const [showTimePicker, setShowTimePicker] = useState(false);
+    const [manualTime, setManualTime] = useState(() => new Date().toISOString().slice(11, 16));
 
     // Weather / Spray Info
     const [temp, setTemp] = useState('75');
@@ -457,17 +470,48 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                         )}
                     </View>
                     {/* ... (Date Picker) ... */}
-                    {showTimePicker && (
+                    {showTimePicker && (DateTimePicker ? (
                         <DateTimePicker
                             value={sprayedAt}
                             mode="time"
                             display="default"
-                            onChange={(event, date) => {
+                            onChange={(event: any, date: Date | undefined) => {
                                 setShowTimePicker(false);
-                                if (date) setSprayedAt(date);
+                                if (date) {
+                                    setSprayedAt(date);
+                                    setManualTime(date.toISOString().slice(11, 16));
+                                }
                             }}
                         />
-                    )}
+                    ) : (
+                        <View style={styles.dateFallback}>
+                            <Text style={styles.dateFallbackText}>Update the time manually:</Text>
+                            <TextInput
+                                style={styles.timeInput}
+                                value={manualTime}
+                                onChangeText={(value) => {
+                                    setManualTime(value);
+                                    const [hour = '00', minute = '00'] = value.split(':');
+                                    const updated = new Date(sprayedAt);
+                                    updated.setHours(Number(hour));
+                                    updated.setMinutes(Number(minute));
+                                    setSprayedAt(updated);
+                                }}
+                                placeholder="HH:MM"
+                                keyboardType="numeric"
+                                maxLength={5}
+                                accessibilityLabel="Manual time input"
+                            />
+                            <TouchableOpacity
+                                onPress={() => setShowTimePicker(false)}
+                                style={styles.dateFallbackButton}
+                                accessibilityRole="button"
+                                accessibilityLabel="Done editing time"
+                            >
+                                <Text style={{ color: Theme.colors.primary, fontWeight: 'bold' }}>DONE</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ))}
                 </View>
 
                 {/* 2. MAIN INPUTS: Recipe & Acres */}
@@ -538,6 +582,37 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                     </ScrollView>
                 </View>
 
+                {/* 2.5 GRAIN INPUTS (Harvest/Delivery/Adjustment) */}
+                {(type === 'HARVEST' || type === 'DELIVERY' || type === 'ADJUSTMENT' || type === 'HARVEST_TO_TOWN') && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle} accessibilityRole="header">AMOUNTS</Text>
+                        <View style={styles.amountRow}>
+                            <View style={styles.amountGroup}>
+                                <Text style={styles.inputLabelSmall}>Bushels</Text>
+                                <TextInput
+                                    style={styles.amountInput}
+                                    placeholder="Bushels"
+                                    value={bushels}
+                                    onChangeText={setBushels}
+                                    keyboardType="numeric"
+                                    accessibilityLabel="Bushels"
+                                />
+                            </View>
+                            <View style={styles.amountGroup}>
+                                <Text style={styles.inputLabelSmall}>Moisture %</Text>
+                                <TextInput
+                                    style={styles.amountInput}
+                                    placeholder="Moisture"
+                                    value={moisture}
+                                    onChangeText={setMoisture}
+                                    keyboardType="numeric"
+                                    accessibilityLabel="Moisture"
+                                />
+                            </View>
+                        </View>
+                    </View>
+                )}
+
                 {/* 3. OPTIONAL / DETAILS */}
                 <View style={styles.section}>
                     <TextInput
@@ -565,7 +640,7 @@ export const LogSessionScreen = ({ type, fixedId, fixedName, fixedAcreage, fixed
                 )}
 
                 {/* SAVE AND REUSE BUTTON */}
-                <View style={{ paddingHorizontal: Theme.spacing.md, marginTop: 10 }}>
+                <View style={{ paddingHorizontal: Theme.spacing.md, marginTop: Theme.spacing.lg }}>
                     <TouchableOpacity
                         style={styles.saveReuseButton}
                         onPress={() => handleLog(true)}
@@ -702,12 +777,65 @@ const styles = StyleSheet.create({
         padding: Theme.spacing.lg,
         borderRadius: Theme.borderRadius.md,
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: Theme.spacing.lg,
         ...Theme.shadows.md
     },
     saveReuseText: {
         color: Theme.colors.primary,
         fontWeight: 'bold',
         fontSize: 16
+    },
+
+    dateFallback: {
+        marginTop: 16,
+        padding: Theme.spacing.sm,
+        borderRadius: Theme.borderRadius.sm,
+        borderWidth: 1,
+        borderColor: Theme.colors.border,
+        backgroundColor: '#fff',
+        alignItems: 'center'
+    },
+    dateFallbackText: {
+        fontSize: 13,
+        fontWeight: '600',
+        marginBottom: 12
+    },
+    timeInput: {
+        width: '60%',
+        textAlign: 'center',
+        borderWidth: 1,
+        borderColor: Theme.colors.border,
+        borderRadius: Theme.borderRadius.sm,
+        paddingVertical: 10,
+        fontSize: 16,
+        marginBottom: 12,
+        minHeight: 44
+    },
+    dateFallbackButton: {
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: Theme.borderRadius.sm,
+        borderWidth: 1,
+        borderColor: Theme.colors.primary,
+        minHeight: 44,
+        justifyContent: 'center'
+    },
+
+    amountRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between'
+    },
+    amountGroup: {
+        flex: 1
+    },
+    amountInput: {
+        borderWidth: 1,
+        borderColor: Theme.colors.border,
+        backgroundColor: '#fff',
+        borderRadius: Theme.borderRadius.sm,
+        paddingHorizontal: Theme.spacing.md,
+        fontSize: 16,
+        minHeight: 64,
+        justifyContent: 'center'
     }
 });

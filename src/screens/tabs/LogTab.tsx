@@ -38,7 +38,7 @@ export const LogTab = ({ onLogAction }: LogTabProps) => {
                 <BackButton onPress={() => setSubView('MENU')} title="Select Field for Spraying" />
                 <FieldListScreen
                     mode="SELECT"
-                    onSelectAction={(f) => handleFieldSelect(f, 'SPRAY')}
+                    onSelectAction={(f: Field) => handleFieldSelect(f, 'SPRAY')}
                 />
             </View>
         );
@@ -49,7 +49,7 @@ export const LogTab = ({ onLogAction }: LogTabProps) => {
                 <BackButton onPress={() => setSubView('MENU')} title="Select Field for Planting" />
                 <FieldListScreen
                     mode="SELECT"
-                    onSelectAction={(f) => handleFieldSelect(f, 'PLANTING')}
+                    onSelectAction={(f: Field) => handleFieldSelect(f, 'PLANTING')}
                 />
             </View>
         );
@@ -60,7 +60,7 @@ export const LogTab = ({ onLogAction }: LogTabProps) => {
                 <BackButton onPress={() => setSubView('MENU')} title="Select Field to Harvest" />
                 <FieldListScreen
                     mode="SELECT"
-                    onSelectAction={(f) => handleFieldSelect(f, 'HARVEST')}
+                    onSelectAction={(f: Field) => handleFieldSelect(f, 'HARVEST')}
                 />
             </View>
         );

@@ -139,21 +139,74 @@ const MobileFilePersister = {
 };
 
 class ExpoPowerSyncDatabase extends AbstractPowerSyncDatabase {
+    private indexRetryCount = 0;
+    private indexRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
     async _initialize(): Promise<void> {
-        try {
-            const db = this.database;
-            // Ensure indices are present for critical queries
-            await db.execute('CREATE INDEX IF NOT EXISTS idx_spray_logs_field_time ON spray_logs(field_id, sprayed_at)');
-            await db.execute('CREATE INDEX IF NOT EXISTS idx_farms_owner ON farms(owner_id)');
-            await db.execute('CREATE INDEX IF NOT EXISTS idx_farm_members_user ON farm_members(user_id)');
-            await db.execute('CREATE INDEX IF NOT EXISTS idx_grain_logs_bin_time ON grain_logs(bin_id, occurred_at)');
-            await db.execute('CREATE INDEX IF NOT EXISTS idx_planting_logs_field_time ON planting_logs(field_id, planted_at)');
-            await db.execute('CREATE INDEX IF NOT EXISTS idx_attachments_owner ON attachments(owner_record_id)');
-            await db.execute('CREATE INDEX IF NOT EXISTS idx_invites_token ON invites(token)');
-            await db.execute('CREATE INDEX IF NOT EXISTS idx_rent_agreements_landlord ON rent_agreements(landlord_id, crop_year)');
-            await db.execute('CREATE INDEX IF NOT EXISTS idx_agreement_fields_field ON agreement_fields(field_id)');
-        } catch (e) {
-            console.warn('[PowerSync] Index initialization skipped or failed:', e);
+        const db = this.database;
+
+        const extractRows = (result: any): any[] => {
+            const rowsArray = result?.rows?._array;
+            if (Array.isArray(rowsArray)) return rowsArray;
+
+            const rowsObj = result?.rows;
+            if (rowsObj && typeof rowsObj.item === 'function' && typeof rowsObj.length === 'number') {
+                return Array.from({ length: rowsObj.length }, (_, i) => rowsObj.item(i));
+            }
+
+            if (Array.isArray(rowsObj)) return rowsObj;
+            return [];
+        };
+
+        const tableExists = async (table: string) => {
+            const res = await db.execute(
+                `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`,
+                [table]
+            );
+            return extractRows(res).length > 0;
+        };
+
+        const tryCreateIndex = async (table: string, sql: string) => {
+            if (!(await tableExists(table))) return false;
+            try {
+                await db.execute(sql);
+                return true;
+            } catch (e: any) {
+                const msg = String(e?.message || e);
+                // Most common cause: schema not created yet on initial boot (web), or drifted columns.
+                if (msg.includes('no such table') || msg.includes('no such column')) return false;
+
+                console.warn('[PowerSync] Index initialization skipped or failed:', e);
+                return true; // don't retry on unknown errors
+            }
+        };
+
+        const indices: Array<{ table: string; sql: string }> = [
+            { table: 'spray_logs', sql: 'CREATE INDEX IF NOT EXISTS idx_spray_logs_field_time ON spray_logs(field_id, sprayed_at)' },
+            { table: 'farms', sql: 'CREATE INDEX IF NOT EXISTS idx_farms_owner ON farms(owner_id)' },
+            { table: 'farm_members', sql: 'CREATE INDEX IF NOT EXISTS idx_farm_members_user ON farm_members(user_id)' },
+            // NOTE: grain_logs does not have occurred_at; end_time is the chronological column.
+            { table: 'grain_logs', sql: 'CREATE INDEX IF NOT EXISTS idx_grain_logs_bin_end_time ON grain_logs(bin_id, end_time)' },
+            { table: 'planting_logs', sql: 'CREATE INDEX IF NOT EXISTS idx_planting_logs_field_time ON planting_logs(field_id, planted_at)' },
+            { table: 'attachments', sql: 'CREATE INDEX IF NOT EXISTS idx_attachments_owner ON attachments(owner_record_id)' },
+            { table: 'invites', sql: 'CREATE INDEX IF NOT EXISTS idx_invites_token ON invites(token)' },
+            { table: 'rent_agreements', sql: 'CREATE INDEX IF NOT EXISTS idx_rent_agreements_landlord ON rent_agreements(landlord_id, crop_year)' },
+            { table: 'agreement_fields', sql: 'CREATE INDEX IF NOT EXISTS idx_agreement_fields_field ON agreement_fields(field_id)' },
+        ];
+
+        let shouldRetry = false;
+        for (const idx of indices) {
+            const ok = await tryCreateIndex(idx.table, idx.sql);
+            if (!ok) shouldRetry = true;
+        }
+
+        // Retry quietly a few times to avoid boot-time noise on web.
+        if (shouldRetry && this.indexRetryCount < 5 && !this.indexRetryTimer) {
+            this.indexRetryCount += 1;
+            this.indexRetryTimer = setTimeout(() => {
+                this.indexRetryTimer = null;
+                this._initialize().catch(() => { });
+            }, 750);
         }
     }
 

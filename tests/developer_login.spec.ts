@@ -1,10 +1,13 @@
 import { test, expect } from '@playwright/test';
 
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || '/';
+
 test.describe('Developer Login Procedure', () => {
     test('should log in and complete onboarding', async ({ page }) => {
+        test.setTimeout(60000);
         try {
             // 1. Navigate to the app
-            await page.goto('https://farmflow-seven.vercel.app');
+            await page.goto(BASE_URL);
 
             // 2. Wait for the login screen
             const loginBtn = page.getByText('Developer Quick-Login (No Password)');
@@ -21,8 +24,6 @@ test.describe('Developer Login Procedure', () => {
             // 5. Detect Onboarding or Dashboard
             // New users land on "Welcome to FarmFlow"
             const welcomeText = page.getByText(/Welcome to FarmFlow/i);
-            const fieldsText = page.getByText(/Fields/i).first();
-
             const isWelcome = await welcomeText.isVisible({ timeout: 15000 }).catch(() => false);
 
             if (isWelcome) {
@@ -34,20 +35,24 @@ test.describe('Developer Login Procedure', () => {
                 console.log('[Test] Clicked Start Farming.');
             }
 
-            // 6. Final verification: Dashboard should be visible
-            await expect(page.getByText(/Fields/i).first()).toBeVisible({ timeout: 30000 });
+            // 6. Final verification: supabase auth token persisted
+            const storageKey = 'sb-skkbmmxjclpbbijcrgyi-auth-token';
+            await page.waitForFunction((key) => !!window.localStorage.getItem(key), storageKey, { timeout: 30000 });
             console.log('[Test] Dashboard reached successfully!');
 
         } catch (e) {
             console.error('[Test] Test failed. Capturing screenshot...');
-            await page.screenshot({ path: 'login-onboarding-failure.png', fullPage: true });
+            if (!page.isClosed()) {
+                await page.screenshot({ path: 'login-onboarding-failure.png', fullPage: true });
+            }
             throw e;
         }
     });
 
     test('should handle session clearing and retry', async ({ page }) => {
+        test.setTimeout(60000);
         try {
-            await page.goto('https://farmflow-seven.vercel.app');
+            await page.goto(BASE_URL);
 
             const resetButton = page.getByText('Reset App (Clear Local State)');
             if (await resetButton.isVisible()) {

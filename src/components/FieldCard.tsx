@@ -66,37 +66,50 @@ export const FieldCard: React.FC<FieldCardProps> = ({ field, onAction }) => {
                 </View>
             </View>
 
-            {/* Actions */}
+            {/* Actions (two rows for 64px touch targets + clarity) */}
             <View
-                className="flex-row border-t border-gray-50"
-                style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#f9fafb' }}
+                className="border-t border-gray-50"
+                style={{ borderTopWidth: 1, borderTopColor: '#f9fafb' }}
             >
-                <TouchableOpacity
-                    className="flex-1 bg-blue-600 py-4 rounded-xl items-center shadow-sm active:bg-blue-700"
-                    style={{ flex: 1, backgroundColor: '#2563eb', paddingVertical: 16, alignItems: 'center' }}
-                    onPress={() => onAction('PLANTING')}
-                    testID={`field-card-plant-${field.id}`}
-                >
-                    <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>PLANT</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row' }}>
+                    <TouchableOpacity
+                        className="flex-1 bg-green-600 py-4 rounded-xl items-center shadow-sm active:bg-green-700"
+                        style={{ flex: 1, backgroundColor: '#16a34a', paddingVertical: 16, alignItems: 'center', minHeight: 64, justifyContent: 'center' }}
+                        onPress={() => onAction('PLANTING')}
+                        testID={`field-card-plant-${field.id}`}
+                    >
+                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>PLANT</Text>
+                    </TouchableOpacity>
 
-                <TouchableOpacity
-                    className="flex-1 bg-yellow-600 py-4 rounded-xl items-center shadow-sm active:bg-yellow-700"
-                    style={{ flex: 1, backgroundColor: '#ca8a04', paddingVertical: 16, alignItems: 'center' }}
-                    onPress={() => onAction('SPRAY')}
-                    testID={`field-card-spray-${field.id}`}
-                >
-                    <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>SPRAY</Text>
-                </TouchableOpacity>
+                    <TouchableOpacity
+                        className="flex-1 bg-blue-600 py-4 rounded-xl items-center shadow-sm active:bg-blue-700"
+                        style={{ flex: 1, backgroundColor: '#2563eb', paddingVertical: 16, alignItems: 'center', minHeight: 64, justifyContent: 'center' }}
+                        onPress={() => onAction('SPRAY')}
+                        testID={`field-card-spray-${field.id}`}
+                    >
+                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>SPRAY</Text>
+                    </TouchableOpacity>
+                </View>
 
-                <TouchableOpacity
-                    className="flex-1 bg-orange-600 py-4 rounded-xl items-center shadow-sm active:bg-orange-700"
-                    style={{ flex: 1, backgroundColor: '#ea580c', paddingVertical: 16, alignItems: 'center' }}
-                    onPress={() => onAction('HARVEST_TO_TOWN')}
-                    testID={`field-card-harvest-${field.id}`}
-                >
-                    <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>HARVEST</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row' }}>
+                    <TouchableOpacity
+                        className="flex-1 bg-yellow-600 py-4 rounded-xl items-center shadow-sm active:bg-yellow-700"
+                        style={{ flex: 1, backgroundColor: '#ca8a04', paddingVertical: 16, alignItems: 'center', minHeight: 64, justifyContent: 'center' }}
+                        onPress={() => onAction('HARVEST')}
+                        testID={`field-card-harvest-${field.id}`}
+                    >
+                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>HARVEST</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        className="flex-1 bg-purple-700 py-4 rounded-xl items-center shadow-sm active:bg-purple-800"
+                        style={{ flex: 1, backgroundColor: '#7e22ce', paddingVertical: 16, alignItems: 'center', minHeight: 64, justifyContent: 'center' }}
+                        onPress={() => onAction('HARVEST_TO_TOWN')}
+                        testID={`field-card-harvest-to-town-${field.id}`}
+                    >
+                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>TO TOWN</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
         </View>
     );

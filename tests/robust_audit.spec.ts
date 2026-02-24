@@ -51,7 +51,7 @@ async function injectAppData(page: Page) {
 test('Recursive UI Discovery and Stress Test', async ({ page }) => {
     test.setTimeout(300000); // 5 minutes
     await mockLogin(page);
-    await page.goto('http://localhost:8081');
+    await page.goto('/');
     await injectAppData(page);
 
     const interactives = page.locator('button, a, [role="button"], [data-testid], [accessibilityrole="button"]');
@@ -79,7 +79,7 @@ test('Recursive UI Discovery and Stress Test', async ({ page }) => {
                 }
 
                 // Reset to home for next element
-                await page.goto('http://localhost:8081');
+                await page.goto('/');
                 await page.waitForTimeout(2000);
             }
         } catch (e: any) {

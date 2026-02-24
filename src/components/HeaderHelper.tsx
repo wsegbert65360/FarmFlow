@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Text, StyleSheet } from 'react-native';
 import { Theme } from '../constants/Theme';
 import { TabType } from './navigation/TabBar';
-import { db } from '../db/powersync';
 
 interface HeaderHelperProps {
     activeTab: TabType;
@@ -19,9 +18,6 @@ export const HeaderHelper: React.FC<HeaderHelperProps> = ({ activeTab }) => {
                     // Real logic: count fields without logs in last X days?
                     // For now, simpler: "Overview of your operation"
                     setContextLine('Overview of your operation');
-                    break;
-                case 'LOG':
-                    setContextLine('Record activities & conditions');
                     break;
                 case 'HISTORY':
                     setContextLine('Recent activity feed');

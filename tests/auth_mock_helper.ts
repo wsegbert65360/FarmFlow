@@ -37,5 +37,30 @@ export async function mockFarm(page: Page) {
             `INSERT OR REPLACE INTO fields (id, name, acreage, farm_id, created_at) VALUES (?, ?, ?, ?, ?)`,
             ['field-1', 'North 40', 40, 'test-farm-id', new Date().toISOString()]
         );
+
+        // Seed a default seed variety so PLANTING flows are saveable
+        await db.execute(
+            `INSERT OR REPLACE INTO seed_varieties (id, brand, variety_name, type, default_population, farm_id, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            ['seed-1', 'Pioneer', 'P1197', 'Corn', 32000, 'test-farm-id', new Date().toISOString()]
+        );
+
+        // Seed a default spray recipe so SPRAY flows are saveable
+        await db.execute(
+            `INSERT OR REPLACE INTO recipes (id, name, product_name, epa_number, rate_per_acre, water_rate_per_acre, phi_days, rei_hours, farm_id, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ['recipe-1', 'Test Herbicide Pass', 'Glyphosate', '123-ABC', 1.0, 15.0, 7, 12, 'test-farm-id', new Date().toISOString()]
+        );
+        await db.execute(
+            `INSERT OR REPLACE INTO recipe_items (id, recipe_id, product_name, epa_number, rate, unit, farm_id, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            ['recipe-item-1', 'recipe-1', 'Glyphosate', '123-ABC', 1.0, 'qt/ac', 'test-farm-id', new Date().toISOString()]
+        );
+
+        // Seed a default bin so HARVEST (Field -> Bin) flows are testable
+        await db.execute(
+            `INSERT OR REPLACE INTO bins (id, name, capacity, crop_type, farm_id, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+            ['bin-1', 'Test Bin 1', 50000, 'Corn', 'test-farm-id', new Date().toISOString()]
+        );
     });
 }

@@ -18,17 +18,9 @@ test('verify dashboard polish', async ({ page }) => {
     // 3. Screenshot Dashboard Top (Bins)
     await page.screenshot({ path: 'test-results/dashboard_polish_bins.png' });
 
-    // 4. Go to Manage -> Fields to see Field List
-    const manageTab = page.getByTestId('tab-MANAGE');
-    if (await manageTab.isVisible()) {
-        await manageTab.click();
-    } else {
-        await page.getByTestId('tab-MORE').click();
-        await page.getByText('Manage Farm').click();
-    }
-    await page.getByText('Fields').click();
-
-    await expect(page.getByText('Your Fields')).toBeVisible();
+    // 4. Return to Fields (Manage) and verify a Field Card is present
+    await page.getByTestId('tab-MANAGE').click();
+    await expect(page.getByText('North 40')).toBeVisible();
 
     // 5. Screenshot Field List
     await page.screenshot({ path: 'test-results/dashboard_polish_fields.png' });

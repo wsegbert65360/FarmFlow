@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 import { z } from 'zod';
+// Platform import intentionally omitted (not required here).
 
 export interface WeatherData {
     temperature: number;
@@ -19,6 +20,16 @@ const WeatherApiResponseSchema = z.object({
 
 export const fetchCurrentWeather = async (): Promise<WeatherData | null> => {
     try {
+        // Deterministic weather for Playwright / E2E runs (no geolocation permissions).
+        if (typeof globalThis !== 'undefined' && (globalThis as any).E2E_TESTING) {
+            return {
+                temperature: 72,
+                windSpeed: 8,
+                windDirection: 'NW',
+                humidity: 45,
+            };
+        }
+
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') return null;
 

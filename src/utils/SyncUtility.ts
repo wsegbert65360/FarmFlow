@@ -158,7 +158,7 @@ export const SyncUtility = {
 
         // Tables that may or may not exist in Supabase (added later locally)
         const optionalTables = [
-            'recipe_items', 'farm_members', 'landlords', 'landlord_shares', 'attachments'
+            'recipe_items', 'farm_members', 'landlords', 'landlord_shares', 'attachments', 'invites'
         ];
 
         let totalRows = 0;
@@ -234,7 +234,7 @@ export const SyncUtility = {
             'settings', 'fields', 'recipes', 'recipe_items', 'seed_varieties',
             'spray_logs', 'planting_logs', 'bins', 'grain_logs',
             'contracts', 'inventory', 'farm_members', 'landlords',
-            'landlord_shares', 'attachments'
+            'landlord_shares', 'attachments', 'invites'
         ];
 
         let totalPushed = 0;

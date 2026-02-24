@@ -18,7 +18,8 @@ To persist this change for the user:
 ## Functional Consistency Standards
 - **Plant Button (Green):** Must pre-fill `field_id` in the PlantingLog form.
 - **Spray Button (Blue):** Must auto-fetch and pre-fill current local weather data.
-- **Harvest Button (Gold):** Triggers `HARVEST_TO_TOWN` by default to ensure grain movement tracking.
+- **Harvest Button (Gold):** Defaults to **Field → Bin** (`HARVEST`) for Field-to-Bin lifecycle integrity.
+  - A separate **TO TOWN** action (`HARVEST_TO_TOWN`) must remain available on the Field Card so both movement paths are explicit.
 - **Global FAB (+):** Must open a selection menu for activities not tied to a specific field.
 - **Hit Targets:** All interactive elements must maintain a minimum 44x44px hit target for accessibility.
 - **Sync Feedback:** All "Pending" states should be interactive, allowing users to manually trigger a sync retry.

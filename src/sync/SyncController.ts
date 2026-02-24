@@ -119,6 +119,14 @@ class SyncController {
     }
 
     async sync() {
+        const isE2E = typeof globalThis !== 'undefined' && !!(globalThis as any).E2E_TESTING;
+        if (isE2E) {
+            // Playwright/E2E runs use the in-browser PowerSync DB seeded by test helpers.
+            // Avoid connecting to Supabase / remote sync to prevent console noise and flaky network coupling.
+            this.updateState({ mode: 'LOCAL_ONLY', isHydrated: true, lastError: null });
+            return;
+        }
+
         if (!this.state.isConnected) {
             console.log('[SyncController] Skipping sync: Offline');
             return;

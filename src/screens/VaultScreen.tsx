@@ -14,8 +14,7 @@ import { generateDiagnosticReport } from '../utils/DiagnosticUtility';
 import { useSettings } from '../hooks/useSettings';
 import { parseNumericInput, parseIntegerInput } from '../utils/NumberUtility';
 import { lookupEPA, calculateMaxRestrictions } from '../utils/EPAUtility';
-import { connector } from '../db/SupabaseConnector';
-import { v4 as uuidv4 } from 'uuid';
+import { useDatabase } from '../hooks/useDatabase';
 
 import { VaultTabNavigation, VaultTab } from '../components/vault/VaultTabNavigation';
 import { VaultCard } from '../components/vault/VaultCard';
@@ -32,6 +31,7 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
     const { landlords, fieldSplits, loading: landlordsLoading, addLandlord, deleteSplit, deleteLandlord } = useLandlords();
     const { grainLogs, loading: grainLoading } = useGrain();
     const { settings, saveSettings } = useSettings();
+    const { insertFarmRow } = useDatabase();
     const { width } = useWindowDimensions();
 
     const isDesktop = width > 768;
@@ -151,25 +151,20 @@ export const VaultScreen = ({ initialTab }: { initialTab?: VaultTab }) => {
         if (!settings?.farm_id) return;
         setGeneratingInvite(true);
         try {
-            const user = await connector.getUser();
-            if (!user) throw new Error('User session not found');
-
             const token = Math.random().toString(36).substring(2, 11).toUpperCase();
-            const { error } = await connector.client
-                .from('invites')
-                .insert({
-                    id: uuidv4(),
-                    farm_id: settings.farm_id,
-                    token: token,
-                    role: 'WORKER',
-                    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
-                });
 
-            if (error) throw error;
+            // Offline-first: write locally, then allow sync pipeline to propagate remotely.
+            await insertFarmRow('invites', {
+                token,
+                role: 'WORKER',
+                expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+            });
+
             setInviteToken(token);
-            saveSettings({ farm_join_token: token }); // Save last token to settings too
-        } catch (e: any) {
-            showAlert('Error', `Failed to generate invite: ${e.message}`);
+            await saveSettings({ farm_join_token: token }); // Save last token to settings too
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : 'Unknown error';
+            showAlert('Error', `Failed to generate invite: ${message}`);
         } finally {
             setGeneratingInvite(false);
         }

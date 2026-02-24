@@ -13,17 +13,13 @@ interface ManageTabProps {
 }
 
 export const ManageTab = ({ onLogAction }: ManageTabProps) => {
-    const [view, setView] = useState<ManageView>('FIELDS');
+    const [view, setView] = useState<ManageView>('MENU');
 
     if (view === 'FIELDS') {
         return (
             <View style={{ flex: 1 }}>
                 <BackButton onPress={() => setView('MENU')} title="Manage Fields" />
                 <FieldListScreen
-                    onSelectAction={(f, type) => onLogAction?.({
-                        type,
-                        source: { id: f.id, name: f.name, acreage: f.acreage, type: 'FIELD' }
-                    })}
                     mode="MANAGE"
                 />
             </View>

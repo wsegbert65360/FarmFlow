@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Platform } from 'react-native';
 import { db } from '../db/powersync';
 import { v4 as uuidv4 } from 'uuid';
 import { useSettings } from './useSettings';
@@ -28,6 +29,8 @@ export const useFields = () => {
 
     useEffect(() => {
         const getLoc = async () => {
+            // Web (and many test runners) may not support Permissions API used by expo-location.
+            if (Platform.OS === 'web') return;
             try {
                 const { status } = await Location.requestForegroundPermissionsAsync();
                 if (status === 'granted') {
@@ -128,6 +131,15 @@ export const useFields = () => {
 
     const deleteField = async (id: string) => {
         try {
+            if (!farmId) throw new Error('Cannot delete field without active farm context.');
+            const harvestCount = await db.get<{ count: number }>(
+                'SELECT COUNT(id) as count FROM grain_logs WHERE field_id = ? AND farm_id = ?',
+                [id, farmId]
+            );
+            const count = harvestCount?.count ?? 0;
+            if (Number(count) > 0) {
+                throw new Error('This field has existing harvest records and cannot be deleted.');
+            }
             await deleteFarmRow('fields', id);
         } catch (error) {
             console.error('Failed to delete field', error);

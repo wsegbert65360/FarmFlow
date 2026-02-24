@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, StyleSheet } from 'react-native';
+import { TouchableOpacity, Text } from 'react-native';
 
 interface FABProps {
     onPress: () => void;
@@ -13,7 +13,7 @@ export const FloatingActionButton: React.FC<FABProps> = ({ onPress }) => {
             activeOpacity={0.8}
             testID="floating-action-button"
         >
-            <Text style={{ color: 'white', fontSize: 32, fontWeight: 'bold' }}>+</Text>
+            <Text className="text-white text-4xl font-extrabold">+</Text>
         </TouchableOpacity>
     );
 };

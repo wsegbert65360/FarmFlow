@@ -79,6 +79,7 @@ export const AppShell = () => {
 
     const { width } = useWindowDimensions();
     const isDesktop = width > 768;
+    const isE2E = typeof globalThis !== 'undefined' && !!(globalThis as any).E2E_TESTING;
 
     if (activeLog) {
         return (
@@ -167,7 +168,11 @@ export const AppShell = () => {
                             <Text style={{ color: '#15803D', fontSize: 10, fontWeight: 'bold' }}>ONLINE</Text>
                         </View>
                         <Image
-                            source={{ uri: 'https://i.pravatar.cc/100?u=' + (user?.id || 'default') }}
+                            source={
+                                isE2E
+                                    ? require('../../assets/icon.png')
+                                    : { uri: 'https://i.pravatar.cc/100?u=' + (user?.id || 'default') }
+                            }
                             className="w-10 h-10 rounded-full border-2 border-white shadow-sm"
                             style={{ width: 40, height: 40, borderRadius: 20 }}
                             testID="header-avatar"
