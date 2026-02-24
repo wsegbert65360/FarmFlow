@@ -7,13 +7,14 @@ import { ReportsScreen } from '../ReportsScreen';
 import { VaultScreen } from '../VaultScreen';
 
 type ManageView = 'MENU' | 'FIELDS' | 'BINS_CONTRACTS' | 'REPORTS' | 'VAULT';
+type ManageViewExtended = ManageView | 'ACTIVITY_REVIEW';
 
 interface ManageTabProps {
     onLogAction?: (action: { type: any, source: any, replacesLogId?: string }) => void;
 }
 
 export const ManageTab = ({ onLogAction }: ManageTabProps) => {
-    const [view, setView] = useState<ManageView>('MENU');
+    const [view, setView] = useState<ManageViewExtended>('MENU');
 
     if (view === 'FIELDS') {
         return (
@@ -30,6 +31,16 @@ export const ManageTab = ({ onLogAction }: ManageTabProps) => {
             <View style={{ flex: 1 }}>
                 <BackButton onPress={() => setView('MENU')} title="Manage Bins & Contracts" />
                 <GrainDashboardScreen onSelectAction={() => { }} mode="MANAGE" />
+            </View>
+        );
+    }
+    if (view === 'ACTIVITY_REVIEW') {
+        return (
+            <View style={{ flex: 1 }}>
+                <BackButton onPress={() => setView('MENU')} title="Activity Review" />
+                {/* Lazy-load Activity Review screen to keep bundle small */}
+                {/* eslint-disable-next-line @typescript-eslint/no-var-requires */}
+                {require('../ActivityReviewScreen').ActivityReviewScreen && require('../ActivityReviewScreen').ActivityReviewScreen()}
             </View>
         );
     }
@@ -57,6 +68,7 @@ export const ManageTab = ({ onLogAction }: ManageTabProps) => {
             <MenuButton title="Fields" icon="🚜" onPress={() => setView('FIELDS')} subtitle="Add, Edit, Splits" testID="manage-fields-btn" />
             <MenuButton title="Bins & Contracts" icon="🏭" onPress={() => setView('BINS_CONTRACTS')} subtitle="Inventory, Sales" testID="manage-bins-btn" />
             <MenuButton title="Vault" icon="🧪" onPress={() => setView('VAULT')} subtitle="Chemicals, Seeds, Landlords" testID="manage-vault-btn" />
+            <MenuButton title="Activity Review" icon="📝" onPress={() => setView('ACTIVITY_REVIEW')} subtitle="Review & bulk actions" testID="manage-activity-review-btn" />
             <MenuButton title="Reports" icon="📊" onPress={() => setView('REPORTS')} subtitle="Cost Analysis, Packets" testID="manage-reports-btn" />
             <MenuButton title="Agreements" icon="🤝" onPress={() => { }} subtitle="Coming Soon" disabled />
 

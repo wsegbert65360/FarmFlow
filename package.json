@@ -8,7 +8,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build:web": "expo export --platform web --output-dir dist",
-    "postinstall": "node scripts/patch-svg.js"
+    "postinstall": "node scripts/patch-svg.js",
+    "clear-invalid-responses": "node scripts/clear_invalid_responses.js"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

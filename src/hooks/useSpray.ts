@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../db/powersync';
+import { recordAudit } from '../utils/DatabaseUtility';
 import { useDatabase } from './useDatabase';
 import { v4 as uuidv4 } from 'uuid';
 import { Recipe, SprayLog } from '../types/spray';
@@ -290,7 +291,28 @@ export const useSpray = () => {
 
     const deleteSprayLog = async (id: string) => {
         try {
-            await deleteFarmRow('spray_logs', id);
+            if (!farmId) throw new Error('[useSpray] Cannot delete spray log without active farm context.');
+
+            await db.writeTransaction(async (tx: any) => {
+                // Remove any snapshot items first
+                await tx.execute('DELETE FROM spray_log_items WHERE spray_log_id = ? AND farm_id = ?', [id, farmId]);
+                // Remove the log itself
+                await tx.execute('DELETE FROM spray_logs WHERE id = ? AND farm_id = ?', [id, farmId]);
+
+                // Record an audit row for the deletion
+                try {
+                    await recordAudit({
+                        action: 'DELETE',
+                        tableName: 'spray_logs',
+                        recordId: id,
+                        farmId,
+                        changes: { id }
+                    }, tx);
+                } catch (e) {
+                    // Audit failures should not block the delete, but log them
+                    console.warn('[useSpray] audit failed for deleteSprayLog', e);
+                }
+            });
         } catch (error) {
             console.error('Failed to delete spray log', error);
             throw error;

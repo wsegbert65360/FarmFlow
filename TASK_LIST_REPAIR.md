@@ -108,6 +108,20 @@ This document tracks the repair work completed during the **"Full Season" diagno
 - Normalize/standardize `grain_logs.destination_type` values.
 - (Optional) Normalize E2E Sync behavior so tests can opt-in to remote hydration when needed.
 
+### Activity Review (NEW)
+
+- Added Activity Review screen with Planting / Spraying / Grain tabs.
+- Added bulk selection UI with "Delete Selected" confirmation.
+- Deletion now removes related child rows where applicable (e.g., spray_log_items) and records audit entries.
+- Deletion guardrails enforced for fields (cannot delete fields with harvests).
+
+Files:
+- `src/screens/ActivityReviewScreen.tsx`
+- `src/hooks/useSpray.ts` (deleteSprayLog now removes spray_log_items)
+- `src/screens/tabs/ManageTab.tsx` (menu entry)
+ 
+Note: The Activity Review feature is accessible from Manage → Activity Review.
+
 ### [BLOCKED]
 
 - **`tests/full_season_e2e.ts` cannot be run directly via `node`** due to ESM/TS module semantics (`SyntaxError: Cannot use import statement outside a module`).
@@ -237,6 +251,8 @@ This document tracks the repair work completed during the **"Full Season" diagno
    }
  }
 ```
+
+
 
 
 

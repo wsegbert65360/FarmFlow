@@ -1,5 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Ensure HOME environment variable is available on Windows CI/runners.
+// Some tooling (Playwright / Firefox) expects a valid HOME directory and
+// can fail when it's not set. Map HOME -> USERPROFILE when necessary to
+// keep visual tools stable on Windows machines.
+if (process.platform === 'win32' && !process.env.HOME && process.env.USERPROFILE) {
+  process.env.HOME = process.env.USERPROFILE;
+}
+
 /**
  * Playwright configuration for FarmFlow Expo Web
  */

@@ -1,5 +1,25 @@
 import fs from 'fs';
 import path from 'path';
+
+/**
+ * safeReadFileSync - guard against attempting to read directories which would
+ * cause EISDIR. Throws a helpful error if the path is not a file.
+ */
+function safeReadFileSync(filePath: string, encoding: BufferEncoding | null = 'utf8'): string {
+    try {
+        const st = fs.statSync(filePath);
+        if (!st.isFile()) {
+            throw new Error(`[safeReadFileSync] Path is not a file: ${filePath}`);
+        }
+    } catch (err: any) {
+        if (err && err.code === 'ENOENT') {
+            throw new Error(`[safeReadFileSync] File not found: ${filePath}`);
+        }
+        throw err;
+    }
+    const raw = fs.readFileSync(filePath, encoding as any);
+    return (raw as unknown) as string;
+}
 import { AppSchema } from '../src/db/schema/index';
 
 /**
@@ -11,7 +31,7 @@ async function validateSchema() {
     console.log('--- Database Schema Validation ---');
 
     const migrationPath = path.join(__dirname, '../supabase/migrations/20240215_complete_schema.sql');
-    const sql = fs.readFileSync(migrationPath, 'utf8').toLowerCase();
+    const sql = safeReadFileSync(migrationPath, 'utf8').toLowerCase();
 
     let hasErrors = false;
     const tables = AppSchema.tables;
